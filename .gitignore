@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+daghbas_share.db
+data/storage/
+dist/
+build/
+*.spec
