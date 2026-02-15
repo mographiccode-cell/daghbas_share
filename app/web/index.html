@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Daghbas Share - الواجهة الشبكية</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap');
+    :root { --bg:#f5f7fb; --card:#fff; --text:#1b1f2a; --primary:#0f62fe; --danger:#b00020; --muted:#5f6b7a; --input:#d0d7e2; }
+    body.dark { --bg:#0f1724; --card:#1b2434; --text:#e6edf6; --primary:#4c8dff; --danger:#ff6b81; --muted:#b8c2cf; --input:#3a465b; }
+    body { font-family:'IBM Plex Sans Arabic',sans-serif;margin:0;background:var(--bg);color:var(--text);transition:.2s; }
+    .container { max-width:1100px;margin:20px auto;padding:16px; }
+    .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap}
+    .card { background:var(--card);border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.12);padding:16px;margin-bottom:14px; }
+    h1,h2 { margin:0 0 10px; }
+    p.helper{margin:0;color:var(--muted)}
+    label { display:block;margin:8px 0 4px;font-weight:600; }
+    input,button,select { font-family:inherit;font-size:14px; }
+    input,select { width:100%;padding:10px;border:1px solid var(--input);border-radius:8px;background:transparent;color:var(--text) }
+    button { padding:10px 14px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer }
+    button.secondary { background:#5f6b7a; }
+    button:disabled { opacity:.6;cursor:not-allowed }
+    .row { display:grid;grid-template-columns:1fr 1fr;gap:10px }
+    ul { padding-right:18px; }
+    .status { padding:10px;background:rgba(15,98,254,.12);border-radius:8px;margin-top:10px }
+    .error { color:var(--danger);font-weight:600;margin-top:8px;white-space:pre-wrap }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <h1 id="title">نظام مشاركة الملفات والمهام</h1>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <select id="lang-select" onchange="switchLanguage()" style="width:auto">
+          <option value="ar">العربية</option>
+          <option value="en">English</option>
+        </select>
+        <button class="secondary" id="theme-btn" onclick="toggleTheme()">Dark</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="helper" id="subtitle">واجهة عربية مبسطة وسهلة الاستخدام داخل الشبكة الداخلية.</p>
+      <div class="row">
+        <div>
+          <label id="lbl-username">اسم المستخدم</label>
+          <input id="username" placeholder="admin" />
+        </div>
+        <div>
+          <label id="lbl-password">كلمة المرور</label>
+          <input id="password" type="password" placeholder="admin123" />
+        </div>
+      </div>
+      <button id="login-btn" onclick="login()">تسجيل الدخول</button>
+      <div id="auth-status" class="status">لم يتم تسجيل الدخول بعد.</div>
+      <div id="global-error" class="error"></div>
+    </div>
+
+    <div class="card">
+      <h2 id="folders-title">المجلدات</h2>
+      <button class="secondary" id="folders-btn" onclick="loadFolders()">تحديث</button>
+      <ul id="folders"></ul>
+      <div id="folders-error" class="error"></div>
+    </div>
+
+    <div class="card">
+      <h2 id="tasks-title">مهامي</h2>
+      <button class="secondary" id="tasks-btn" onclick="loadTasks()">تحديث</button>
+      <ul id="tasks"></ul>
+      <div id="tasks-error" class="error"></div>
+    </div>
+
+    <div class="card">
+      <h2 id="admin-title">لوحة تحكم الأدمن (صلاحية مطلقة)</h2>
+      <div class="row">
+        <div>
+          <label id="lbl-fileid">معرف الملف File ID</label>
+          <input id="admin-file-id" placeholder="1" />
+        </div>
+        <div>
+          <label id="lbl-targetfolder">المجلد الهدف Target Folder ID (للنقل)</label>
+          <input id="admin-target-folder-id" placeholder="2" />
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button onclick="adminLock()" id="btn-lock">قفل الملف</button>
+        <button onclick="adminUnlock()" id="btn-unlock">فك القفل</button>
+        <button onclick="adminMove()" id="btn-move">نقل الملف</button>
+        <button onclick="adminDelete()" id="btn-delete" style="background:#c62828">حذف الملف</button>
+      </div>
+      <div id="admin-error" class="error"></div>
+      <div id="admin-status" class="status"></div>
+    </div>
+  </div>
+
+  <script>
+    let token = null;
+    let lang = 'ar';
+    const i18n = {
+      ar: {
+        title:'نظام مشاركة الملفات والمهام', subtitle:'واجهة عربية مبسطة وسهلة الاستخدام داخل الشبكة الداخلية.',
+        u:'اسم المستخدم', p:'كلمة المرور', login:'تسجيل الدخول', notLogged:'لم يتم تسجيل الدخول بعد.', loginOk:'تم تسجيل الدخول بنجاح.', loginFail:'فشل تسجيل الدخول.',
+        folders:'المجلدات', tasks:'مهامي', refresh:'تحديث', admin:'لوحة تحكم الأدمن (صلاحية مطلقة)', fileid:'معرف الملف File ID', target:'المجلد الهدف Target Folder ID (للنقل)',
+        lock:'قفل الملف', unlock:'فك القفل', move:'نقل الملف', del:'حذف الملف', needLogin:'سجّل الدخول أولاً', noFolders:'لا توجد مجلدات متاحة.', noTasks:'لا توجد مهام حالياً.'
+      },
+      en: {
+        title:'File & Task Sharing System', subtitle:'Simple and professional intranet interface.',
+        u:'Username', p:'Password', login:'Login', notLogged:'Not logged in yet.', loginOk:'Login successful.', loginFail:'Login failed.',
+        folders:'Folders', tasks:'My Tasks', refresh:'Refresh', admin:'Admin Panel (Full Control)', fileid:'File ID', target:'Target Folder ID (Move)',
+        lock:'Lock File', unlock:'Unlock File', move:'Move File', del:'Delete File', needLogin:'Please login first', noFolders:'No folders available.', noTasks:'No tasks assigned.'
+      }
+    }
+
+    function t(k){ return i18n[lang][k] || k; }
+    function setBusy(id,b){ const e=document.getElementById(id); if(e) e.disabled=b; }
+    function showError(id,msg){ const e=document.getElementById(id); if(e) e.textContent=msg||''; }
+    function showStatus(id,msg){ const e=document.getElementById(id); if(e) e.textContent=msg||''; }
+
+    function switchLanguage(){
+      lang = document.getElementById('lang-select').value;
+      document.documentElement.lang = lang;
+      document.documentElement.dir = lang==='ar' ? 'rtl' : 'ltr';
+      document.getElementById('title').textContent=t('title');
+      document.getElementById('subtitle').textContent=t('subtitle');
+      document.getElementById('lbl-username').textContent=t('u');
+      document.getElementById('lbl-password').textContent=t('p');
+      document.getElementById('login-btn').textContent=t('login');
+      document.getElementById('folders-title').textContent=t('folders');
+      document.getElementById('tasks-title').textContent=t('tasks');
+      document.getElementById('folders-btn').textContent=t('refresh');
+      document.getElementById('tasks-btn').textContent=t('refresh');
+      document.getElementById('admin-title').textContent=t('admin');
+      document.getElementById('lbl-fileid').textContent=t('fileid');
+      document.getElementById('lbl-targetfolder').textContent=t('target');
+      document.getElementById('btn-lock').textContent=t('lock');
+      document.getElementById('btn-unlock').textContent=t('unlock');
+      document.getElementById('btn-move').textContent=t('move');
+      document.getElementById('btn-delete').textContent=t('del');
+      document.getElementById('auth-status').textContent=t('notLogged');
+    }
+
+    function toggleTheme(){
+      document.body.classList.toggle('dark');
+      document.getElementById('theme-btn').textContent = document.body.classList.contains('dark') ? 'Light' : 'Dark';
+    }
+
+    async function apiRequest(path, options = {}, errorTarget='global-error') {
+      showError(errorTarget,'');
+      try {
+        const res = await fetch(path, options);
+        const raw = await res.text();
+        let data = {}; try { data = raw ? JSON.parse(raw) : {}; } catch { data = {raw}; }
+        if(!res.ok){ throw new Error(`HTTP ${res.status} - ${data.detail || data.raw || 'Unknown error'}`); }
+        return data;
+      } catch(err){ showError(errorTarget, `Error details:\n${err.message}`); throw err; }
+    }
+
+    async function login(){
+      const username=document.getElementById('username').value.trim();
+      const password=document.getElementById('password').value.trim();
+      setBusy('login-btn',true); showError('global-error','');
+      try{
+        if(!username || !password) throw new Error(lang==='ar'?'يرجى إدخال اسم المستخدم وكلمة المرور':'Please fill username and password');
+        const data = await apiRequest('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,device_id:'web-client'})});
+        token=data.access_token; showStatus('auth-status',t('loginOk'));
+      }catch(e){ showStatus('auth-status',t('loginFail')); }
+      finally{ setBusy('login-btn',false); }
+    }
+
+    async function loadFolders(){
+      if(!token) return showError('folders-error', t('needLogin'));
+      setBusy('folders-btn',true); const ul=document.getElementById('folders'); ul.innerHTML='';
+      try{
+        const data = await apiRequest('/folders',{headers:{Authorization:`Bearer ${token}`}},'folders-error');
+        if(!Array.isArray(data) || data.length===0){ ul.innerHTML=`<li>${t('noFolders')}</li>`; return; }
+        data.forEach(f=>{ const li=document.createElement('li'); li.textContent=`${f.name} (#${f.id})`; ul.appendChild(li); });
+      }finally{ setBusy('folders-btn',false); }
+    }
+
+    async function loadTasks(){
+      if(!token) return showError('tasks-error', t('needLogin'));
+      setBusy('tasks-btn',true); const ul=document.getElementById('tasks'); ul.innerHTML='';
+      try{
+        const data = await apiRequest('/tasks/my',{headers:{Authorization:`Bearer ${token}`}},'tasks-error');
+        if(!Array.isArray(data) || data.length===0){ ul.innerHTML=`<li>${t('noTasks')}</li>`; return; }
+        data.forEach(x=>{ const li=document.createElement('li'); li.textContent=`${x.title} - ${x.status}`; ul.appendChild(li); });
+      }finally{ setBusy('tasks-btn',false); }
+    }
+
+    function getAdminIds(){
+      const id = document.getElementById('admin-file-id').value.trim();
+      const target = document.getElementById('admin-target-folder-id').value.trim();
+      if(!id) throw new Error(lang==='ar'?'أدخل File ID':'Enter File ID');
+      return {id, target};
+    }
+
+    async function adminLock(){
+      try{ const {id}=getAdminIds(); const d=await apiRequest(`/lock/${id}`,{method:'POST',headers:{Authorization:`Bearer ${token}`}},'admin-error'); showStatus('admin-status',JSON.stringify(d)); }catch(e){}
+    }
+    async function adminUnlock(){
+      try{ const {id}=getAdminIds(); const d=await apiRequest(`/unlock/${id}`,{method:'POST',headers:{Authorization:`Bearer ${token}`}},'admin-error'); showStatus('admin-status',JSON.stringify(d)); }catch(e){}
+    }
+    async function adminMove(){
+      try{ const {id,target}=getAdminIds(); if(!target) throw new Error(lang==='ar'?'أدخل Target Folder ID':'Enter target folder id'); const d=await apiRequest(`/files/${id}/move?target_folder_id=${target}`,{method:'POST',headers:{Authorization:`Bearer ${token}`}},'admin-error'); showStatus('admin-status',JSON.stringify(d)); }catch(e){ showError('admin-error',e.message); }
+    }
+    async function adminDelete(){
+      try{ const {id}=getAdminIds(); const d=await apiRequest(`/files/${id}`,{method:'DELETE',headers:{Authorization:`Bearer ${token}`}},'admin-error'); showStatus('admin-status',JSON.stringify(d)); }catch(e){}
+    }
+  </script>
+</body>
+</html>
