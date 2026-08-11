@@ -1,5 +1,4 @@
 const puppeteer = require('puppeteer-core');
-const fs = require('fs');
 
 (async () => {
   const chrome = process.env.CHROME_BIN;
@@ -7,46 +6,56 @@ const fs = require('fs');
   const page = await browser.newPage();
   await page.setViewport({width:430,height:900,deviceScaleFactor:1});
   const sleep = ms => new Promise(r=>setTimeout(r,ms));
-  const shot = async name => { await sleep(900); await page.screenshot({path:`screens/${name}.png`}); };
+  const shot = async name => { await sleep(1100); await page.screenshot({path:`screens/${name}.png`}); };
   await page.goto('http://127.0.0.1:8080',{waitUntil:'networkidle0'});
   await sleep(5000);
   await shot('01_login');
 
-  // Sign in
-  await page.mouse.click(215,650); await sleep(1800); await shot('02_discover');
+  // Sign in -> Discover
+  await page.mouse.click(215,650); await sleep(1700); await shot('02_discover');
 
-  // Search/filter controls
-  await page.mouse.click(375,280); await sleep(900); await shot('03_filters');
+  // Filters panel
+  await page.mouse.click(369,208); await sleep(1000); await shot('03_filters');
+  await page.mouse.click(369,208); await sleep(600); // collapse
 
-  // Map bottom navigation
-  await page.mouse.click(160,860); await sleep(1000); await shot('04_map');
+  // Manual location sheet
+  await page.mouse.click(345,305); await sleep(1000); await shot('04_location');
+  await page.keyboard.press('Escape'); await sleep(600);
 
-  // Back to Discover and open first place
-  await page.mouse.click(55,860); await sleep(700);
-  await page.mouse.click(215,620); await sleep(1000); await shot('05_details');
+  // Save and compare first place from Discover
+  await page.mouse.click(378,460); await sleep(500);
+  await page.mouse.click(370,679); await sleep(500);
 
-  // Back, save first place, then favorites
-  await page.mouse.click(32,32); await sleep(700);
-  await page.mouse.click(378,555); await sleep(600);
-  await page.mouse.click(270,860); await sleep(900); await shot('06_favorites');
+  // Details
+  await page.mouse.click(190,679); await sleep(1100); await shot('05_details');
+
+  // Write review sheet
+  await page.mouse.click(350,619); await sleep(1000); await shot('06_write_review');
+  await page.keyboard.press('Escape'); await sleep(600);
+
+  // Map through details
+  await page.mouse.click(110,415); await sleep(1100); await shot('07_map');
+
+  // Favorites should include saved first place
+  await page.mouse.click(270,860); await sleep(1000); await shot('08_favorites');
 
   // Settings
-  await page.mouse.click(375,860); await sleep(900); await shot('07_settings');
+  await page.mouse.click(375,860); await sleep(900); await shot('09_settings');
 
-  // Preferences bottom sheet
-  await page.mouse.click(215,180); await sleep(900); await shot('08_preferences');
-  await page.keyboard.press('Escape'); await sleep(500);
+  // Preferences sheet via trailing arrow
+  await page.mouse.click(370,196); await sleep(1100); await shot('10_preferences');
+  await page.keyboard.press('Escape'); await sleep(600);
 
-  // Compare bottom sheet
-  await page.mouse.click(215,260); await sleep(900); await shot('09_compare');
-  await page.keyboard.press('Escape'); await sleep(500);
+  // Compare sheet
+  await page.mouse.click(370,277); await sleep(1100); await shot('11_compare');
+  await page.keyboard.press('Escape'); await sleep(600);
 
-  // AI status
-  await page.mouse.click(215,340); await sleep(900); await shot('10_ai_status');
-  await page.keyboard.press('Escape');
+  // AI status sheet
+  await page.mouse.click(370,358); await sleep(1100); await shot('12_ai_status');
+  await page.keyboard.press('Escape'); await sleep(600);
 
-  // Arabic switch in Settings
-  await page.mouse.click(215,105); await sleep(900); await shot('11_arabic_settings');
+  // Arabic secondary language
+  await page.mouse.click(370,116); await sleep(1000); await shot('13_arabic_settings');
 
   await browser.close();
 })();
