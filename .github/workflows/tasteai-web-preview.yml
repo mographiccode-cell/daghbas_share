@@ -61,10 +61,30 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path('tasteai-web-preview/app/build/web/index.html')
-          s=p.read_text()
-          s=s.replace('<base href="/">','<base href="./">')
+          s=p.read_text().replace('<base href="/">','<base href="./">')
           p.write_text(s)
           PY
+
+      - name: Capture real Flutter Web screenshots in Chrome
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p tasteai-web-preview/screens
+          python3 -m http.server 8080 --bind 127.0.0.1 --directory tasteai-web-preview/app/build/web >/tmp/tasteai-http.log 2>&1 &
+          cd tasteai-web-preview
+          npm init -y >/dev/null 2>&1
+          npm install puppeteer-core@24.16.0 --no-save >/dev/null 2>&1
+          export CHROME_BIN="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          node capture.js
+          ls -lh screens
+
+      - name: Upload Flutter screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: tasteai-flutter-runtime-screenshots
+          path: tasteai-web-preview/screens
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Upload Flutter web build
         uses: actions/upload-artifact@v4
