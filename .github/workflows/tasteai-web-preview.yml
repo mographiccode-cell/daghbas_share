@@ -1,0 +1,54 @@
+name: TasteAI Flutter Web Preview
+
+on:
+  push:
+    branches:
+      - tasteai-web-preview-20260811
+  workflow_dispatch:
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Recreate TasteAI Flutter source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p tasteai-web-preview/app
+          base64 --decode tasteai-web-preview/source.zip.b64 > tasteai-web-preview/source.zip
+          unzip -q -o tasteai-web-preview/source.zip -d tasteai-web-preview/app
+          cd tasteai-web-preview/app
+          flutter create . --platforms web --project-name restaurant_ai_mobile --org com.tasteai
+
+      - name: Resolve dependencies
+        working-directory: tasteai-web-preview/app
+        run: flutter pub get
+
+      - name: Flutter analyze
+        working-directory: tasteai-web-preview/app
+        run: flutter analyze
+
+      - name: Flutter tests
+        working-directory: tasteai-web-preview/app
+        run: flutter test
+
+      - name: Build Flutter web
+        working-directory: tasteai-web-preview/app
+        run: flutter build web --release --dart-define=API_BASE_URL=http://127.0.0.1:8000
+
+      - name: Upload Flutter web build
+        uses: actions/upload-artifact@v4
+        with:
+          name: tasteai-flutter-web-build
+          path: tasteai-web-preview/app/build/web
+          if-no-files-found: error
+          retention-days: 1
