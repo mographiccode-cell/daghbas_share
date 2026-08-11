@@ -29,10 +29,16 @@ jobs:
           cat tasteai-final-audit/source_parts/part_*.txt | base64 --decode > tasteai_mobile_min.tar.xz
           echo '996b9bea91d709aa1c407d3cd00c2be82cffc0a7d4ab0b702adce8f8330735c5  tasteai_mobile_min.tar.xz' | sha256sum -c -
           echo 'b232609cabe7b13252454b1d0b74273077babe8abb4f8eb1543240915cb7e105  tasteai-final-audit/final_delta.patch' | sha256sum -c -
+          echo '3fbd0688548767aff8857a2724a8d4727fb6637e39c7dde4b6e198f5fefd511c  tasteai-final-audit/overrides/bootstrap_android_manifest.py' | sha256sum -c -
+          echo '14845642b81b57d478a9f1cb82270f80ef78a25f66a9eb17030992d02779b382  tasteai-final-audit/overrides/model_contract_test.dart' | sha256sum -c -
+          echo 'd3b905dcc9c1c8585df27683e4405201715c0381bef7f2bd821674dda0ee8e86  tasteai-final-audit/overrides/app_shell_widget_test.dart' | sha256sum -c -
           tar -xJf tasteai_mobile_min.tar.xz -C audit_app
           cd audit_app/mobile
           patch -p1 < ../../tasteai-final-audit/final_delta.patch
           rm -f lib/screens/home_screen.dart
+          cp ../../tasteai-final-audit/overrides/bootstrap_android_manifest.py bootstrap_android_manifest.py
+          cp ../../tasteai-final-audit/overrides/model_contract_test.dart test/model_contract_test.dart
+          cp ../../tasteai-final-audit/overrides/app_shell_widget_test.dart test/app_shell_widget_test.dart
           test -f lib/screens/app_shell_screen.dart
           test -f lib/screens/top_rated_screen.dart
           grep -q 'AppShellScreen' lib/main.dart
