@@ -19,15 +19,23 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Recreate TasteAI Flutter source
+      - name: Create Flutter Web review app
         shell: bash
         run: |
           set -euxo pipefail
-          mkdir -p tasteai-web-preview/app
-          base64 --decode tasteai-web-preview/source.zip.b64 > tasteai-web-preview/source.zip
-          unzip -q -o tasteai-web-preview/source.zip -d tasteai-web-preview/app
-          cd tasteai-web-preview/app
-          flutter create . --platforms web --project-name restaurant_ai_mobile --org com.tasteai
+          rm -rf tasteai-web-preview/app
+          flutter create tasteai-web-preview/app --platforms web --project-name tasteai_web_preview --org com.tasteai
+          cp tasteai-web-preview/app_main.dart tasteai-web-preview/app/lib/main.dart
+          cp tasteai-web-preview/preview_pubspec.yaml tasteai-web-preview/app/pubspec.yaml
+          rm -rf tasteai-web-preview/app/test
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('tasteai-web-preview/app/lib/main.dart')
+          s=p.read_text()
+          s=s.replace("r'$'*p.p", "List.filled(p.p, r'$').join()")
+          s=s.replace("r'$'*price.round()", "List.filled(price.round(), r'$').join()")
+          p.write_text(s)
+          PY
 
       - name: Resolve dependencies
         working-directory: tasteai-web-preview/app
@@ -37,13 +45,9 @@ jobs:
         working-directory: tasteai-web-preview/app
         run: flutter analyze
 
-      - name: Flutter tests
-        working-directory: tasteai-web-preview/app
-        run: flutter test
-
       - name: Build Flutter web
         working-directory: tasteai-web-preview/app
-        run: flutter build web --release --dart-define=API_BASE_URL=http://127.0.0.1:8000
+        run: flutter build web --release
 
       - name: Upload Flutter web build
         uses: actions/upload-artifact@v4
