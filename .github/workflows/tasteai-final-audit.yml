@@ -1,0 +1,85 @@
+name: TasteAI Final Mobile Audit
+
+on:
+  push:
+    branches:
+      - tasteai-final-audit-rebuild-20260811
+  workflow_dispatch:
+
+jobs:
+  flutter-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Recreate real TasteAI mobile project
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm -rf audit_app
+          mkdir -p audit_app
+          unzip -q tasteai-final-audit/mobile_source.zip -d audit_app
+          cd audit_app/mobile
+          test -f lib/screens/app_shell_screen.dart
+          test -f lib/screens/top_rated_screen.dart
+          grep -q 'AppShellScreen' lib/main.dart
+          grep -q 'Minimum review count' lib/screens/app_shell_screen.dart
+          flutter create . --platforms web,android --project-name restaurant_ai_mobile --org com.tasteai
+          python3 bootstrap_android_manifest.py
+          printf '\nMAPS_API_KEY=TEST_BUILD_ONLY_NOT_A_REAL_KEY\n' >> android/local.properties
+
+      - name: Flutter pub get
+        working-directory: audit_app/mobile
+        run: flutter pub get
+
+      - name: Flutter analyze
+        working-directory: audit_app/mobile
+        run: flutter analyze
+
+      - name: Flutter tests
+        working-directory: audit_app/mobile
+        run: flutter test
+
+      - name: Build Flutter Web
+        working-directory: audit_app/mobile
+        run: flutter build web --release --dart-define=API_BASE_URL=http://127.0.0.1:8000
+
+      - name: Build Android debug APK
+        working-directory: audit_app/mobile
+        run: flutter build apk --debug --dart-define=API_BASE_URL=http://10.0.2.2:8000
+
+      - name: Audit generated outputs
+        working-directory: audit_app/mobile
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test -f build/web/index.html
+          test -f build/app/outputs/flutter-apk/app-debug.apk
+          grep -q 'com.google.android.geo.API_KEY' android/app/src/main/AndroidManifest.xml
+          grep -q 'ACCESS_FINE_LOCATION' android/app/src/main/AndroidManifest.xml
+          grep -q 'minSdk = 24' android/app/build.gradle.kts
+          sha256sum build/app/outputs/flutter-apk/app-debug.apk | tee build/apk.sha256
+
+      - name: Upload web build
+        uses: actions/upload-artifact@v4
+        with:
+          name: tasteai-final-real-web-build
+          path: audit_app/mobile/build/web
+          retention-days: 1
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tasteai-final-debug-apk
+          path: |
+            audit_app/mobile/build/app/outputs/flutter-apk/app-debug.apk
+            audit_app/mobile/build/apk.sha256
+          retention-days: 1
