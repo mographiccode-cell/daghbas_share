@@ -20,13 +20,15 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Recreate real TasteAI mobile project
+      - name: Recreate verified real TasteAI mobile source
         shell: bash
         run: |
           set -euxo pipefail
           rm -rf audit_app
           mkdir -p audit_app
-          unzip -q tasteai-final-audit/mobile_source.zip -d audit_app
+          cat tasteai-final-audit/source_parts/part_*.txt | base64 --decode > tasteai_mobile_min.tar.xz
+          echo '996b9bea91d709aa1c407d3cd00c2be82cffc0a7d4ab0b702adce8f8330735c5  tasteai_mobile_min.tar.xz' | sha256sum -c -
+          tar -xJf tasteai_mobile_min.tar.xz -C audit_app
           cd audit_app/mobile
           test -f lib/screens/app_shell_screen.dart
           test -f lib/screens/top_rated_screen.dart
