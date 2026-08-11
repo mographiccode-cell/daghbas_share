@@ -138,13 +138,13 @@ void main() {
 
     await tester.tap(find.text('Choose location').first);
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, 'Country'), 'United Kingdom');
-    await tester.enterText(find.widgetWithText(TextField, 'City'), 'London');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Country'), 'United Kingdom');
+    await tester.enterText(find.widgetWithText(TextFormField, 'City'), 'London');
     await tester.tap(find.text('Explore this location'));
     await tester.pumpAndSettle();
 
     expect(api.discoverCalls, 1);
-    expect(find.text('United Kingdom, London'), findsOneWidget);
+    expect(find.text('London, United Kingdom'), findsOneWidget);
     expect(find.text('Top rated'), findsOneWidget);
     expect(find.text('Recommended for you'), findsOneWidget);
     expect(find.text('Harbor Cafe'), findsWidgets);
