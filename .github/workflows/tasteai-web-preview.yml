@@ -6,6 +6,9 @@ on:
       - tasteai-web-preview-20260811
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-web:
     runs-on: ubuntu-latest
@@ -52,6 +55,17 @@ jobs:
         working-directory: tasteai-web-preview/app
         run: flutter build web --release
 
+      - name: Make build portable
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('tasteai-web-preview/app/build/web/index.html')
+          s=p.read_text()
+          s=s.replace('<base href="/">','<base href="./">')
+          p.write_text(s)
+          PY
+
       - name: Upload Flutter web build
         uses: actions/upload-artifact@v4
         with:
@@ -59,3 +73,11 @@ jobs:
           path: tasteai-web-preview/app/build/web
           if-no-files-found: error
           retention-days: 1
+
+      - name: Publish static Flutter Web runtime
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: tasteai-web-preview/app/build/web
+          publish_branch: tasteai-flutter-runtime
+          force_orphan: true
