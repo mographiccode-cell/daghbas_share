@@ -1,0 +1,208 @@
+diff --git a/lib/main.dart b/lib/main.dart
+index 1176c31..ff673dd 100644
+--- a/lib/main.dart
++++ b/lib/main.dart
+@@ -42,7 +42,7 @@ class _TasteAiAppState extends State<TasteAiApp> {
+   Widget build(BuildContext context) {
+     return ValueListenableBuilder<Locale>(
+       valueListenable: appLocale,
+-      builder: (_, locale, __) => MaterialApp(
++      builder: (context, locale, child) => MaterialApp(
+         debugShowCheckedModeBanner: false,
+         title: 'TasteAI',
+         locale: locale,
+diff --git a/lib/screens/app_shell_screen.dart b/lib/screens/app_shell_screen.dart
+index 557f37a..0553744 100644
+--- a/lib/screens/app_shell_screen.dart
++++ b/lib/screens/app_shell_screen.dart
+@@ -44,6 +44,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
+   double? lastLng;
+ 
+   double minRating = 0;
++  double minPrice = 1;
+   double maxPrice = 4;
+   double maxDistance = 50;
+   int minReviews = 0;
+@@ -217,6 +218,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
+                       area.text = values[2];
+                       lastLat = null;
+                       lastLng = null;
++                      if (sortMode == 'distance') sortMode = 'ai';
+                       Navigator.pop(sheetContext);
+                       runSearch();
+                     },
+@@ -263,8 +265,8 @@ class _AppShellScreenState extends State<AppShellScreen> {
+           (cuisine == 'all' || _matchesType(p, cuisine)) &&
+           p.rating >= minRating &&
+           p.reviewCount >= minReviews &&
+-          (p.priceLevel <= 0 || p.priceLevel <= maxPrice) &&
+-          (!p.distanceKnown || p.distanceKm <= maxDistance);
++          ((minPrice <= 1 && maxPrice >= 4) || (p.priceLevel > 0 && p.priceLevel >= minPrice && p.priceLevel <= maxPrice)) &&
++          ((lastLat == null || lastLng == null) || !p.distanceKnown || p.distanceKm <= maxDistance);
+     }).toList();
+ 
+     if (sortMode == 'rating') {
+@@ -305,8 +307,8 @@ class _AppShellScreenState extends State<AppShellScreen> {
+     if (cuisine != 'all') count++;
+     if (minRating > 0) count++;
+     if (minReviews > 0) count++;
+-    if (maxPrice < 4) count++;
+-    if (maxDistance < 50) count++;
++    if (minPrice > 1 || maxPrice < 4) count++;
++    if (lastLat != null && lastLng != null && maxDistance < 50) count++;
+     if (sortMode != 'ai') count++;
+     return count;
+   }
+@@ -346,12 +348,12 @@ class _AppShellScreenState extends State<AppShellScreen> {
+ 
+   Future<void> showFilters() async {
+     var rating = minRating;
+-    var price = maxPrice;
++    var priceRange = RangeValues(minPrice, maxPrice);
+     var distance = maxDistance;
+     var reviews = minReviews;
+     var type = placeType;
+     var category = cuisine;
+-    var sort = sortMode;
++    var sort = (lastLat == null || lastLng == null) && sortMode == 'distance' ? 'ai' : sortMode;
+ 
+     await showModalBottomSheet<void>(
+       context: context,
+@@ -370,7 +372,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
+                       TextButton(
+                         onPressed: () => setSheetState(() {
+                           rating = 0;
+-                          price = 4;
++                          priceRange = const RangeValues(1, 4);
+                           distance = 50;
+                           reviews = 0;
+                           type = 'all';
+@@ -434,10 +436,23 @@ class _AppShellScreenState extends State<AppShellScreen> {
+                         .toList(),
+                   ),
+                   const SizedBox(height: 18),
+-                  Text('${tr(sheetContext, 'Maximum price', 'أقصى سعر')}: ${List.filled(price.round().clamp(1, 4).toInt(), r'$').join()}', style: const TextStyle(fontWeight: FontWeight.w800)),
+-                  Slider(value: price, min: 1, max: 4, divisions: 3, onChanged: (v) => setSheetState(() => price = v)),
++                  Text(tr(sheetContext, 'Price range', 'نطاق السعر'), style: const TextStyle(fontWeight: FontWeight.w800)),
++                  const SizedBox(height: 4),
++                  Row(children: [
++                    Text(List.filled(priceRange.start.round().clamp(1, 4).toInt(), r'$').join(), style: const TextStyle(fontWeight: FontWeight.w700)),
++                    const Spacer(),
++                    Text(List.filled(priceRange.end.round().clamp(1, 4).toInt(), r'$').join(), style: const TextStyle(fontWeight: FontWeight.w700)),
++                  ]),
++                  RangeSlider(values: priceRange, min: 1, max: 4, divisions: 3, labels: RangeLabels(priceRange.start.round().toString(), priceRange.end.round().toString()), onChanged: (v) => setSheetState(() => priceRange = v)),
++                  const SizedBox(height: 8),
+                   Text('${tr(sheetContext, 'Maximum distance', 'أقصى مسافة')}: ${distance.round()} km', style: const TextStyle(fontWeight: FontWeight.w800)),
+-                  Slider(value: distance, min: 1, max: 50, divisions: 49, onChanged: (v) => setSheetState(() => distance = v)),
++                  if (lastLat != null && lastLng != null)
++                    Slider(value: distance, min: 1, max: 50, divisions: 49, onChanged: (v) => setSheetState(() => distance = v))
++                  else
++                    Padding(
++                      padding: const EdgeInsets.only(top: 8),
++                      child: Text(tr(sheetContext, 'Distance filtering requires current location. Manual country/city search has no precise distance reference.', 'فلترة المسافة تتطلب استخدام الموقع الحالي. البحث اليدوي بالدولة أو المدينة لا يملك مرجع مسافة دقيقًا.'), style: TextStyle(color: Theme.of(sheetContext).colorScheme.onSurfaceVariant)),
++                    ),
+                   const SizedBox(height: 8),
+                   DropdownButtonFormField<String>(
+                     initialValue: sort,
+@@ -445,7 +460,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
+                     items: [
+                       DropdownMenuItem(value: 'ai', child: Text(tr(sheetContext, 'Best match for me', 'الأفضل لي'))),
+                       DropdownMenuItem(value: 'rating', child: Text(tr(sheetContext, 'Highest rated', 'الأعلى تقييمًا'))),
+-                      DropdownMenuItem(value: 'distance', child: Text(tr(sheetContext, 'Nearest first', 'الأقرب أولًا'))),
++                      DropdownMenuItem(value: 'distance', enabled: lastLat != null && lastLng != null, child: Text(tr(sheetContext, 'Nearest first', 'الأقرب أولًا'))),
+                     ],
+                     onChanged: (v) => setSheetState(() => sort = v ?? 'ai'),
+                   ),
+@@ -454,12 +469,13 @@ class _AppShellScreenState extends State<AppShellScreen> {
+                     onPressed: () {
+                       setState(() {
+                         minRating = rating;
+-                        maxPrice = price;
+-                        maxDistance = distance;
++                        minPrice = priceRange.start;
++                        maxPrice = priceRange.end;
++                        if (lastLat != null && lastLng != null) maxDistance = distance;
+                         minReviews = reviews;
+                         placeType = type;
+                         cuisine = category;
+-                        sortMode = sort;
++                        sortMode = (lastLat == null || lastLng == null) && sort == 'distance' ? 'ai' : sort;
+                       });
+                       Navigator.pop(sheetContext);
+                     },
+@@ -647,7 +663,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
+               child: ListView.separated(
+                 scrollDirection: Axis.horizontal,
+                 itemCount: top.length,
+-                separatorBuilder: (_, __) => const SizedBox(width: 10),
++                separatorBuilder: (_, _) => const SizedBox(width: 10),
+                 itemBuilder: (_, i) => CompactPlaceCard(api: widget.api, place: top[i], onTap: () => _openPlace(top[i])),
+               ),
+             ),
+diff --git a/lib/screens/compare_screen.dart b/lib/screens/compare_screen.dart
+index 53f7751..2a48629 100644
+--- a/lib/screens/compare_screen.dart
++++ b/lib/screens/compare_screen.dart
+@@ -47,7 +47,7 @@ class CompareScreen extends StatelessWidget {
+                   child: ListView.separated(
+                     scrollDirection: Axis.horizontal,
+                     itemCount: places.length,
+-                    separatorBuilder: (_, __) => const SizedBox(width: 10),
++                    separatorBuilder: (_, _) => const SizedBox(width: 10),
+                     itemBuilder: (_, i) {
+                       final p = places[i];
+                       return SizedBox(
+diff --git a/lib/screens/home_screen.dart b/lib/screens/home_screen.dart
+index 10b81ac..7f27f0d 100644
+--- a/lib/screens/home_screen.dart
++++ b/lib/screens/home_screen.dart
+@@ -712,7 +712,7 @@ class _HomeScreenState extends State<HomeScreen> {
+                 child: ListView.separated(
+                   scrollDirection: Axis.horizontal,
+                   itemCount: top.length,
+-                  separatorBuilder: (_, __) => const SizedBox(width: 10),
++                  separatorBuilder: (_, _) => const SizedBox(width: 10),
+                   itemBuilder: (_, i) => CompactPlaceCard(api: widget.api, place: top[i], onTap: () => _openPlace(top[i])),
+                 ),
+               ),
+diff --git a/lib/screens/map_screen.dart b/lib/screens/map_screen.dart
+index c625267..d884a78 100644
+--- a/lib/screens/map_screen.dart
++++ b/lib/screens/map_screen.dart
+@@ -298,8 +298,8 @@ class _WebMap extends StatelessWidget {
+ 
+   @override
+   Widget build(BuildContext context) {
+-    final lats = <double>[...places.map((p) => p.lat), if (userLat != null) userLat!];
+-    final lngs = <double>[...places.map((p) => p.lng), if (userLng != null) userLng!];
++    final lats = <double>[...places.map((p) => p.lat), ?userLat];
++    final lngs = <double>[...places.map((p) => p.lng), ?userLng];
+     final minLat = lats.reduce((a, b) => a < b ? a : b);
+     final maxLat = lats.reduce((a, b) => a > b ? a : b);
+     final minLng = lngs.reduce((a, b) => a < b ? a : b);
+diff --git a/lib/screens/top_rated_screen.dart b/lib/screens/top_rated_screen.dart
+index df83348..b40f8b3 100644
+--- a/lib/screens/top_rated_screen.dart
++++ b/lib/screens/top_rated_screen.dart
+@@ -63,7 +63,7 @@ class TopRatedScreen extends StatelessWidget {
+           : ListView.separated(
+               padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+               itemCount: items.length,
+-              separatorBuilder: (_, __) => const SizedBox(height: 12),
++              separatorBuilder: (_, _) => const SizedBox(height: 12),
+               itemBuilder: (context, index) {
+                 final place = items[index];
+                 return Column(
+diff --git a/lib/widgets/place_image.dart b/lib/widgets/place_image.dart
+index df5b71c..0387e29 100644
+--- a/lib/widgets/place_image.dart
++++ b/lib/widgets/place_image.dart
+@@ -36,7 +36,7 @@ class PlaceImage extends StatelessWidget {
+                     api.photoUrl(photoName, width: 1200),
+                     headers: api.imageHeaders,
+                     fit: fit,
+-                    errorBuilder: (_, __, ___) => _fallback(context),
++                    errorBuilder: (_, _, _) => _fallback(context),
+                     loadingBuilder: (context, child, progress) {
+                       if (progress == null) return child;
+                       return Container(
