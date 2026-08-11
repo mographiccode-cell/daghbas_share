@@ -32,7 +32,7 @@ jobs:
           echo '3fbd0688548767aff8857a2724a8d4727fb6637e39c7dde4b6e198f5fefd511c  tasteai-final-audit/overrides/bootstrap_android_manifest.py' | sha256sum -c -
           echo '14845642b81b57d478a9f1cb82270f80ef78a25f66a9eb17030992d02779b382  tasteai-final-audit/overrides/model_contract_test.dart' | sha256sum -c -
           echo '57131c2070a38403bb049b727af391e7ab679066ea5b5804bbbe9b7ca1bbfb11  tasteai-final-audit/overrides/app_shell_widget_test.dart' | sha256sum -c -
-          echo 'b9e921e72aa548b668d390ff400c2280250a4bd1d53df46a90db638327b3b3ee  tasteai-final-audit/overrides/app_shell_screen.dart' | sha256sum -c -
+          test "$(git hash-object tasteai-final-audit/overrides/app_shell_screen.dart)" = '2cebc153985dacbc85e8f82e5cbd3ea24b6cf367'
           tar -xJf tasteai_mobile_min.tar.xz -C audit_app
           cd audit_app/mobile
           patch -p1 < ../../tasteai-final-audit/final_delta.patch
