@@ -34,7 +34,10 @@ jobs:
           s=p.read_text()
           s=s.replace("r'$'*p.p", "List.filled(p.p, r'$').join()")
           s=s.replace("r'$'*price.round()", "List.filled(price.round(), r'$').join()")
-          p.write_text(s)
+          lines=s.splitlines()
+          for idx in (17,20,25):
+              lines[idx]=lines[idx][:-1]+');' if lines[idx].endswith(';') else lines[idx]+')'
+          p.write_text('\n'.join(lines)+'\n')
           PY
 
       - name: Resolve dependencies
