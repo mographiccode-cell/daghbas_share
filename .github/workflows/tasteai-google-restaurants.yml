@@ -1,0 +1,66 @@
+name: TasteAI Google Restaurants
+on:
+  push:
+    branches: [tasteai-google-restaurants-20260818]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download official Google Local Alaska 10-core and metadata
+        run: |
+          set -euxo pipefail
+          mkdir -p google_alaska
+          curl -fL 'https://mcauleylab.ucsd.edu/public_datasets/gdrive/googlelocal/review-Alaska_10.json.gz' -o google_alaska/review-Alaska_10.json.gz
+          curl -fL 'https://mcauleylab.ucsd.edu/public_datasets/gdrive/googlelocal/meta-Alaska.json.gz' -o google_alaska/meta-Alaska.json.gz
+          sha256sum google_alaska/*
+      - name: Install training packages
+        run: python -m pip install -q numpy pandas scikit-learn lightgbm
+      - name: Build v3 experiment from audited v2 source
+        run: |
+          set -euxo pipefail
+          cp tasteai_google/train_alaska_v2.py tasteai_google/train_alaska_v3.py
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tasteai_google/train_alaska_v3.py'); s=p.read_text()
+          s=s.replace('from lightgbm import LGBMRanker','from lightgbm import LGBMRanker, LGBMRegressor')
+          s=s.replace('uc[uc>=6]','uc[uc>=8]')
+          oldsplit="if len(g)>=6:trL.append(g.iloc[:-3]);vaL.append(g.iloc[-3:-2]);teL.append(g.iloc[-2:])"
+          newsplit="if len(g)>=8:trL.append(g.iloc[:-4]);vaL.append(g.iloc[-4:-2]);teL.append(g.iloc[-2:])"
+          assert oldsplit in s, 'expected v2 split not found'
+          s=s.replace(oldsplit,newsplit)
+          old="ridge=Ridge(alpha=20).fit(A,ytr);resid_ridge=Ridge(alpha=50).fit(A[:,4:],ytr-Xtr[:,0]);pairs=[];labs=[];rng=np.random.default_rng(42)"
+          new="ridge=Ridge(alpha=20).fit(A,ytr);resid=ytr-Xtr[:,0];resid_ridge=Ridge(alpha=50).fit(A[:,4:],resid);resid_lgb=LGBMRegressor(n_estimators=220,learning_rate=.03,num_leaves=15,max_depth=5,min_child_samples=50,reg_lambda=8,verbosity=-1,random_state=42).fit(Xtr[:,4:],resid) if HAVE_LGB else None;pairs=[];labs=[];rng=np.random.default_rng(42)"
+          assert old in s; s=s.replace(old,new)
+          old="if lgb is not None:V['lambdarank']=lgb.predict(Xv);T['lambdarank']=lgb.predict(Xte)"
+          new="if resid_lgb is not None:V['residual_lgb']=Xv[:,0]+resid_lgb.predict(Xv[:,4:]);T['residual_lgb']=Xte[:,0]+resid_lgb.predict(Xte[:,4:])\nif lgb is not None:V['lambdarank']=lgb.predict(Xv);T['lambdarank']=lgb.predict(Xte)"
+          assert old in s; s=s.replace(old,new)
+          s=s.replace("for name in list(V):","tuned_alphas={}\nfor name in list(V):",1)
+          s=s.replace("for alpha in np.linspace(0,1.5,31):","for alpha in np.linspace(0,2.0,41):")
+          old="T[name+'_blend']=(1-alpha)*Xte[:,0]+alpha*q;print('TUNED',name,'alpha',alpha,'val',best_tuple[2])"
+          new="T[name+'_blend']=(1-alpha)*Xte[:,0]+alpha*q;tuned_alphas[name]=alpha;print('TUNED',name,'alpha',alpha,'val',best_tuple[2])"
+          assert old in s; s=s.replace(old,new)
+          s=s.replace("summary={'dataset':","summary={'tuned_alphas':tuned_alphas,'dataset':")
+          s=s.replace('metrics_v2.json','metrics_v3.json').replace('metrics_v2.csv','metrics_v3.csv').replace('tasteai_linear_ranker_v2.json','tasteai_linear_ranker_v3.json')
+          assert newsplit in s
+          assert 'resid_lgb=LGBMRegressor' in s
+          assert 'tuned_alphas={}' in s
+          p.write_text(s)
+          PY
+          python -m py_compile tasteai_google/train_alaska_v3.py
+      - name: Train v3 and select blend on validation ranking
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python tasteai_google/train_alaska_v3.py | tee alaska_v3_console.txt
+          test -s alaska_v2_out/metrics_v3.json
+          test -s alaska_v2_out/tasteai_linear_ranker_v3.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tasteai-alaska-v3-results
+          path: |
+            alaska_v2_out
+            alaska_v3_console.txt
