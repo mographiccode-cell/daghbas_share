@@ -18,7 +18,17 @@ jobs:
           done
           sha256sum uci_full/* > uci_full/SHA256SUMS.txt
           zip -r uci_full.zip uci_full
+      - name: Run robust OOF diagnostics
+        run: |
+          python -m pip install -q numpy pandas scikit-learn
+          python tasteai_diag/diagnose_full_uci.py | tee diagnostic_console.txt
       - uses: actions/upload-artifact@v4
         with:
           name: uci-full-dataset
           path: uci_full.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tasteai-diagnostic-results
+          path: |
+            diag_out
+            diagnostic_console.txt
