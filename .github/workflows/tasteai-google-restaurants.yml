@@ -28,8 +28,8 @@ jobs:
           p=Path('tasteai_google/train_alaska_v3.py'); s=p.read_text()
           s=s.replace('from lightgbm import LGBMRanker','from lightgbm import LGBMRanker, LGBMRegressor')
           s=s.replace('uc[uc>=6]','uc[uc>=8]')
-          oldsplit="if len(g)>=6: trL.append(g.iloc[:-3]);vaL.append(g.iloc[-3:-2]);teL.append(g.iloc[-2:])"
-          newsplit="if len(g)>=8: trL.append(g.iloc[:-4]);vaL.append(g.iloc[-4:-2]);teL.append(g.iloc[-2:])"
+          oldsplit="if len(g)>=6:trL.append(g.iloc[:-3]);vaL.append(g.iloc[-3:-2]);teL.append(g.iloc[-2:])"
+          newsplit="if len(g)>=8:trL.append(g.iloc[:-4]);vaL.append(g.iloc[-4:-2]);teL.append(g.iloc[-2:])"
           assert oldsplit in s, 'expected v2 split not found'
           s=s.replace(oldsplit,newsplit)
           old="ridge=Ridge(alpha=20).fit(A,ytr);resid_ridge=Ridge(alpha=50).fit(A[:,4:],ytr-Xtr[:,0]);pairs=[];labs=[];rng=np.random.default_rng(42)"
