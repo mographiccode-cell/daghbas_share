@@ -2,6 +2,8 @@ name: Fetch TasteAI UCI Full Dataset
 on:
   push:
     branches: [tasteai-uci-full-dataset-20260818]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 jobs:
   fetch:
