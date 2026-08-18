@@ -1,0 +1,24 @@
+name: TasteAI Google Restaurants
+on:
+  push:
+    branches: [tasteai-google-restaurants-20260818]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download official Google Restaurants subset
+        run: |
+          set -euxo pipefail
+          mkdir -p google_restaurants
+          curl -fL 'https://mcauleylab.ucsd.edu/public_datasets/gdrive/googlelocal_restaurants/filter_all_t.json' -o google_restaurants/filter_all_t.json
+          sha256sum google_restaurants/filter_all_t.json
+      - name: Inspect dataset
+        run: python tasteai_google/inspect_google.py | tee google_inspection.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: google-restaurants-inspection
+          path: google_inspection.txt
