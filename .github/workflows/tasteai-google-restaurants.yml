@@ -45,8 +45,8 @@ jobs:
           p.write_text(s)
           PY
           python -m py_compile tasteai_google/train_alaska_v3.py
-          grep -q 'resid_lgb=LGBMRegressor' tasteai_google/train_alaska_v3.py
-          grep -q "vaL.append(g.iloc\[-4:-2\])" tasteai_google/train_alaska_v3.py
+          grep -Fq 'resid_lgb=LGBMRegressor' tasteai_google/train_alaska_v3.py
+          grep -Fq 'vaL.append(g.iloc[-4:-2])' tasteai_google/train_alaska_v3.py
       - name: Train v3 and select blend on validation ranking
         shell: bash
         run: |
