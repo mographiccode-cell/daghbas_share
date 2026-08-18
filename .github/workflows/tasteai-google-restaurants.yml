@@ -19,12 +19,12 @@ jobs:
           ls -lh google_alaska
           sha256sum google_alaska/*
       - name: Install training packages
-        run: python -m pip install -q numpy pandas scikit-learn
-      - name: Train and evaluate
-        run: python tasteai_google/train_alaska.py | tee alaska_training_console.txt
+        run: python -m pip install -q numpy pandas scikit-learn lightgbm
+      - name: Train leakage-safe ranking models
+        run: python tasteai_google/train_alaska_v2.py | tee alaska_v2_console.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: tasteai-alaska-training-results
+          name: tasteai-alaska-v2-results
           path: |
-            alaska_out
-            alaska_training_console.txt
+            alaska_v2_out
+            alaska_v2_console.txt
