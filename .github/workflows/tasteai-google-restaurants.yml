@@ -6,19 +6,25 @@ on:
     branches: [main]
   workflow_dispatch:
 jobs:
-  inspect:
+  train:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Download official Google Restaurants subset
+      - name: Download official Google Local Alaska 10-core and metadata
         run: |
           set -euxo pipefail
-          mkdir -p google_restaurants
-          curl -fL 'https://mcauleylab.ucsd.edu/public_datasets/gdrive/googlelocal_restaurants/filter_all_t.json' -o google_restaurants/filter_all_t.json
-          sha256sum google_restaurants/filter_all_t.json
-      - name: Inspect dataset
-        run: python tasteai_google/inspect_google.py | tee google_inspection.txt
+          mkdir -p google_alaska
+          curl -fL 'https://mcauleylab.ucsd.edu/public_datasets/gdrive/googlelocal/review-Alaska_10.json.gz' -o google_alaska/review-Alaska_10.json.gz
+          curl -fL 'https://mcauleylab.ucsd.edu/public_datasets/gdrive/googlelocal/meta-Alaska.json.gz' -o google_alaska/meta-Alaska.json.gz
+          ls -lh google_alaska
+          sha256sum google_alaska/*
+      - name: Install training packages
+        run: python -m pip install -q numpy pandas scikit-learn
+      - name: Train and evaluate
+        run: python tasteai_google/train_alaska.py | tee alaska_training_console.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: google-restaurants-inspection
-          path: google_inspection.txt
+          name: tasteai-alaska-training-results
+          path: |
+            alaska_out
+            alaska_training_console.txt
