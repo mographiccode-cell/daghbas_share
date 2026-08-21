@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:doc_viewer/doc_viewer.dart';
+import 'package:docx_file_viewer/docx_file_viewer.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 
@@ -15,6 +16,9 @@ class ViewerScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final typeColor = _kindColor(item.kind);
     return Scaffold(
+      backgroundColor: item.extension.toLowerCase() == 'docx'
+          ? const Color(0xFFE9EBF1)
+          : Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         titleSpacing: 0,
         title: Column(
@@ -28,16 +32,29 @@ class ViewerScreen extends StatelessWidget {
           ],
         ),
       ),
-      body: switch (item.kind) {
-        DocumentKind.pdf => PdfViewer.file(item.path),
-        DocumentKind.word || DocumentKind.excel || DocumentKind.powerpoint => _OfficeViewer(item: item),
-        DocumentKind.text => _TextViewer(path: item.path),
-        _ => const _ViewerMessage(
-            icon: Icons.error_outline_rounded,
-            title: 'هذا النوع غير مدعوم',
-            message: 'لا يمكن معاينة هذا المستند داخل التطبيق.',
-          ),
-      },
+      body: _buildViewer(context),
+    );
+  }
+
+  Widget _buildViewer(BuildContext context) {
+    if (item.kind == DocumentKind.pdf) {
+      return PdfViewer.file(item.path);
+    }
+    if (item.kind == DocumentKind.word && item.extension.toLowerCase() == 'docx') {
+      return _DocxViewer(item: item);
+    }
+    if (item.kind == DocumentKind.word ||
+        item.kind == DocumentKind.excel ||
+        item.kind == DocumentKind.powerpoint) {
+      return _OfficeViewer(item: item);
+    }
+    if (item.kind == DocumentKind.text) {
+      return _TextViewer(path: item.path);
+    }
+    return const _ViewerMessage(
+      icon: Icons.error_outline_rounded,
+      title: 'هذا النوع غير مدعوم',
+      message: 'لا يمكن معاينة هذا المستند داخل التطبيق.',
     );
   }
 
@@ -49,6 +66,43 @@ class ViewerScreen extends StatelessWidget {
         DocumentKind.text => Colors.teal.shade700,
         DocumentKind.other => Colors.grey.shade700,
       };
+}
+
+class _DocxViewer extends StatelessWidget {
+  final DocumentItem item;
+  const _DocxViewer({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: const Color(0xFFE9EBF1),
+      child: DocxView.file(
+        File(item.path),
+        config: DocxViewConfig(
+          pageMode: DocxPageMode.paged,
+          pageWidth: 794,
+          pageHeight: 1123,
+          enableZoom: true,
+          enableSearch: true,
+          enableSelection: true,
+          showPageBreaks: true,
+          showDebugInfo: false,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          backgroundColor: const Color(0xFFE9EBF1),
+          theme: DocxViewTheme.light(),
+          customFontFallbacks: const [
+            'Arial',
+            'Calibri',
+            'Times New Roman',
+            'Roboto',
+          ],
+        ),
+        onError: (error) {
+          debugPrint('DOCX render error: $error');
+        },
+      ),
+    );
+  }
 }
 
 class _OfficeViewer extends StatelessWidget {
