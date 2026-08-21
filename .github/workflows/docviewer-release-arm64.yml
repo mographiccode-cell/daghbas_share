@@ -33,47 +33,28 @@ jobs:
           rm -f docviewer_build/lib/services/document_viewer_service.dart
           ! grep -R "openDocument(" -n docviewer_build/lib
           grep -q 'DocViewerView' docviewer_build/lib/screens/viewer_screen.dart
-          grep -q 'DocxView.file' docviewer_build/lib/screens/viewer_screen.dart
+          grep -q 'DocxView(' docviewer_build/lib/screens/viewer_screen.dart
+          grep -q 'DocxSearchController' docviewer_build/lib/screens/viewer_screen.dart
           grep -q 'docx_file_viewer' docviewer_build/pubspec.yaml
-
-      - name: Add recent documents UX
-        working-directory: docviewer_build
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('lib/screens/home_screen.dart')
-          s = p.read_text()
-          if 'bool recentOnly = false;' not in s:
-              s = s.replace('  bool favoritesOnly = false;\n  bool busy = false;', '  bool favoritesOnly = false;\n  bool recentOnly = false;\n  bool busy = false;')
-              old = """  List<DocumentItem> get visible => DocumentFilter.apply(\n        all,\n        query: search.text,\n        kind: filter,\n        favoritesOnly: favoritesOnly,\n        sort: sort,\n      );\n"""
-              new = """  List<DocumentItem> get visible {\n    final result = DocumentFilter.apply(\n      all,\n      query: search.text,\n      kind: filter,\n      favoritesOnly: favoritesOnly,\n      sort: sort,\n    );\n    if (recentOnly) {\n      result.removeWhere((item) => item.lastOpenedAt == null);\n      result.sort((a, b) => b.lastOpenedAt!.compareTo(a.lastOpenedAt!));\n    }\n    return result;\n  }\n"""
-              if old not in s:
-                  raise SystemExit('visible getter patch point not found')
-              s = s.replace(old, new)
-              s = s.replace("selected: filter == null && !favoritesOnly,", "selected: filter == null && !favoritesOnly && !recentOnly,")
-              s = s.replace("onSelected: (_) => setState(() { filter = null; favoritesOnly = false; }),", "onSelected: (_) => setState(() { filter = null; favoritesOnly = false; recentOnly = false; }),")
-              s = s.replace("onSelected: (value) => setState(() => favoritesOnly = value),", "onSelected: (value) => setState(() { favoritesOnly = value; recentOnly = false; }),")
-              favorite_block = """                FilterChip(\n                  label: const Text('المفضلة'),\n                  avatar: const Icon(Icons.star_rounded, size: 18),\n                  selected: favoritesOnly,\n                  onSelected: (value) => setState(() { favoritesOnly = value; recentOnly = false; }),\n                ),\n"""
-              recent_block = favorite_block + """                const SizedBox(width: 8),\n                FilterChip(\n                  label: const Text('الأخيرة'),\n                  avatar: const Icon(Icons.history_rounded, size: 18),\n                  selected: recentOnly,\n                  onSelected: (value) => setState(() { recentOnly = value; favoritesOnly = false; }),\n                ),\n"""
-              s = s.replace(favorite_block, recent_block, 1)
-              s = s.replace("onSelected: (_) => setState(() { filter = filter == kind ? null : kind; favoritesOnly = false; }),", "onSelected: (_) => setState(() { filter = filter == kind ? null : kind; favoritesOnly = false; recentOnly = false; }),")
-              s = s.replace("Text('${all.length} مستندًا على الهاتف', style: Theme.of(context).textTheme.labelMedium),", "Text('${docs.length} ظاهر من ${all.length} مستندًا', style: Theme.of(context).textTheme.labelMedium),")
-              s = s.replace('onRefresh: _load,', 'onRefresh: () => _load(pruneMissing: true),')
-          p.write_text(s)
-          assert 'bool recentOnly = false;' in s
-          PY
+          grep -q 'version: 2.5.0+7' docviewer_build/pubspec.yaml
 
       - name: Bootstrap Android project
         working-directory: docviewer_build
         run: bash tool/bootstrap_android.sh
 
-      - name: Apply adaptive launcher icon
+      - name: Apply safe adaptive launcher icon
         working-directory: docviewer_build
         run: |
-          mkdir -p android/app/src/main/res/drawable android/app/src/main/res/mipmap-anydpi-v26 android/app/src/main/res/values
+          mkdir -p android/app/src/main/res/drawable \
+                   android/app/src/main/res/mipmap-anydpi-v26 \
+                   android/app/src/main/res/mipmap-anydpi-v33 \
+                   android/app/src/main/res/values
           cp ../docviewer_apk_payload/patch/ic_launcher_foreground.xml android/app/src/main/res/drawable/ic_launcher_foreground.xml
+          cp ../docviewer_apk_payload/patch/ic_launcher_monochrome.xml android/app/src/main/res/drawable/ic_launcher_monochrome.xml
           cp ../docviewer_apk_payload/patch/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
           cp ../docviewer_apk_payload/patch/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          cp ../docviewer_apk_payload/patch/ic_launcher_v33.xml android/app/src/main/res/mipmap-anydpi-v33/ic_launcher.xml
+          cp ../docviewer_apk_payload/patch/ic_launcher_v33.xml android/app/src/main/res/mipmap-anydpi-v33/ic_launcher_round.xml
           cp ../docviewer_apk_payload/patch/colors.xml android/app/src/main/res/values/ic_launcher_colors.xml
           python3 - <<'PY'
           from pathlib import Path
@@ -83,6 +64,9 @@ jobs:
               s=s.replace('android:icon="@mipmap/ic_launcher"\n', 'android:icon="@mipmap/ic_launcher"\n        android:roundIcon="@mipmap/ic_launcher_round"\n')
           p.write_text(s)
           PY
+          grep -q 'android:roundIcon="@mipmap/ic_launcher_round"' android/app/src/main/AndroidManifest.xml
+          test -s android/app/src/main/res/drawable/ic_launcher_foreground.xml
+          test -s android/app/src/main/res/drawable/ic_launcher_monochrome.xml
 
       - name: Patch Android release compatibility
         working-directory: docviewer_build
@@ -98,14 +82,16 @@ jobs:
           s = p.read_text()
           s = re.sub(r'(?m)^(\s*)compileSdk\s*=.*$', r'\1compileSdk = 37', s)
           s = re.sub(r'(?m)^(\s*)minSdk\s*=.*$', r'\1minSdk = 26', s)
-          s = re.sub(r'(?m)^(\s*)applicationId\s*=.*$', r'\1applicationId = "com.mographiccode.mustanadati.reader"', s)
+          s = re.sub(r'(?m)^(\s*)applicationId\s*=.*$', r'\1applicationId = "com.mographiccode.mustanadati.app"', s)
           marker = '        targetCompatibility = JavaVersion.VERSION_17\n'
           if 'isCoreLibraryDesugaringEnabled = true' not in s:
               s = s.replace(marker, marker + '        isCoreLibraryDesugaringEnabled = true\n')
           if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")' not in s:
               s += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")\n}\n'
           p.write_text(s)
-          assert 'applicationId = "com.mographiccode.mustanadati.reader"' in s
+          assert 'applicationId = "com.mographiccode.mustanadati.app"' in s
+          assert re.search(r'(?m)^\s*minSdk\s*=\s*26\s*$', s)
+          assert re.search(r'(?m)^\s*compileSdk\s*=\s*37\s*$', s)
 
           m = Path('android/app/src/main/AndroidManifest.xml')
           manifest = m.read_text()
@@ -132,18 +118,25 @@ jobs:
           import 'package:flutter_test/flutter_test.dart';
           import 'package:universal_doc_viewer/models/document_filter.dart';
           import 'package:universal_doc_viewer/models/document_item.dart';
-          DocumentItem item(String name, String ext, {bool favorite = false}) => DocumentItem(
+          DocumentItem item(String name, String ext, {bool favorite = false, DateTime? opened}) => DocumentItem(
             path: '/tmp/$name.$ext', name: '$name.$ext', extension: ext, size: 1024,
-            modifiedAt: DateTime(2026, 8, 21), isFavorite: favorite,
+            modifiedAt: DateTime(2026, 8, 21), isFavorite: favorite, lastOpenedAt: opened,
           );
           void main() {
-            final docs = [item('report','pdf',favorite:true), item('project','docx'), item('budget','xlsx')];
+            final docs = [
+              item('report','pdf',favorite:true),
+              item('project','docx', opened: DateTime(2026, 8, 21, 10)),
+              item('budget','xlsx'),
+            ];
             test('search and favorites work', () {
               expect(DocumentFilter.apply(docs, query: 'project').single.kind, DocumentKind.word);
               expect(DocumentFilter.apply(docs, favoritesOnly: true).single.name, 'report.pdf');
             });
             test('kind filter isolates Excel', () {
               expect(DocumentFilter.apply(docs, kind: DocumentKind.excel).single.extension, 'xlsx');
+            });
+            test('DOCX maps to Word', () {
+              expect(DocumentItem.kindForExtension('docx'), DocumentKind.word);
             });
           }
           DART
@@ -158,11 +151,11 @@ jobs:
         run: |
           set -euo pipefail
           INPUT=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-          ALIGNED=build/app/outputs/flutter-apk/mustanadati-v24-aligned.apk
-          FINAL=build/app/outputs/flutter-apk/Mustanadati-v2.4.0-WordLayoutFix-ARM64.apk
+          ALIGNED=build/app/outputs/flutter-apk/mustanadati-v25-aligned.apk
+          FINAL=build/app/outputs/flutter-apk/Mustanadati-v2.5.0-Redesign-ARM64.apk
           PASS="$(openssl rand -hex 24)"
           echo "::add-mask::$PASS"
-          KS=/tmp/mustanadati-v24-release.jks
+          KS=/tmp/mustanadati-v25-release.jks
           KEY_ALIAS=mustanadati
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
           ZIPALIGN="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name zipalign | sort -V | tail -1)"
@@ -175,8 +168,8 @@ jobs:
           grep -q 'Verified using v3 scheme (APK Signature Scheme v3): true' build/app/outputs/flutter-apk/signing-verification.txt
           "$ZIPALIGN" -c -P 16 -v 4 "$FINAL" >/dev/null
           "$AAPT" dump badging "$FINAL" | tee build/app/outputs/flutter-apk/badging.txt
-          grep -q "package: name='com.mographiccode.mustanadati.reader'" build/app/outputs/flutter-apk/badging.txt
-          grep -q "versionName='2.4.0'" build/app/outputs/flutter-apk/badging.txt
+          grep -q "package: name='com.mographiccode.mustanadati.app'" build/app/outputs/flutter-apk/badging.txt
+          grep -q "versionName='2.5.0'" build/app/outputs/flutter-apk/badging.txt
           grep -q "sdkVersion:'26'" build/app/outputs/flutter-apk/badging.txt
           grep -q "native-code: 'arm64-v8a'" build/app/outputs/flutter-apk/badging.txt
           ! grep -q 'android.permission.READ_MEDIA_IMAGES' build/app/outputs/flutter-apk/badging.txt
@@ -190,10 +183,10 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Mustanadati-v2.4.0-WordLayoutFix-Signed-ARM64
+          name: Mustanadati-v2.5.0-Redesign-Signed-ARM64
           path: |
-            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.4.0-WordLayoutFix-ARM64.apk
-            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.4.0-WordLayoutFix-ARM64.apk.sha256
+            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.5.0-Redesign-ARM64.apk
+            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.5.0-Redesign-ARM64.apk.sha256
             docviewer_build/build/app/outputs/flutter-apk/signing-verification.txt
             docviewer_build/build/app/outputs/flutter-apk/badging.txt
           if-no-files-found: error
