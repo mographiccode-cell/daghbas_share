@@ -111,7 +111,42 @@ jobs:
           flutter analyze --fatal-infos
       - name: Unit tests
         working-directory: docviewer_build
-        run: flutter test
+        run: |
+          mkdir -p test
+          cat > test/document_filter_test.dart <<'DART'
+          import 'package:flutter_test/flutter_test.dart';
+          import 'package:universal_doc_viewer/models/document_filter.dart';
+          import 'package:universal_doc_viewer/models/document_item.dart';
+
+          DocumentItem item(String name, String ext, {bool favorite = false}) => DocumentItem(
+                path: '/tmp/$name.$ext',
+                name: '$name.$ext',
+                extension: ext,
+                size: 1024,
+                modifiedAt: DateTime(2026, 8, 21),
+                isFavorite: favorite,
+              );
+
+          void main() {
+            final docs = [
+              item('report', 'pdf', favorite: true),
+              item('project', 'docx'),
+              item('budget', 'xlsx'),
+            ];
+
+            test('search filters by name and favorites', () {
+              expect(DocumentFilter.apply(docs, query: 'project').single.kind, DocumentKind.word);
+              expect(DocumentFilter.apply(docs, favoritesOnly: true).single.name, 'report.pdf');
+            });
+
+            test('kind filter isolates Excel', () {
+              final result = DocumentFilter.apply(docs, kind: DocumentKind.excel);
+              expect(result.length, 1);
+              expect(result.single.extension, 'xlsx');
+            });
+          }
+          DART
+          flutter test test/document_filter_test.dart
       - name: Build optimized ARM64 release APK
         working-directory: docviewer_build
         run: flutter build apk --release --target-platform android-arm64 --split-per-abi --obfuscate --split-debug-info=build/symbols
