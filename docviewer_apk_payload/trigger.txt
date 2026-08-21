@@ -1,1 +1,1 @@
-trigger final v2.2 adaptive icon recent filter tests 2026-08-21
+trigger signed installable final v2.3.0 package identity signing verification 2026-08-21
