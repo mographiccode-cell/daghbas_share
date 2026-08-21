@@ -21,6 +21,7 @@ jobs:
           mkdir -p docviewer_build
           cat docviewer_apk_payload/part*.b64 | base64 -d > /tmp/docviewer.tar.gz
           tar -xzf /tmp/docviewer.tar.gz -C docviewer_build
+          touch docviewer_build/README.md
       - name: Bootstrap Android project
         working-directory: docviewer_build
         run: bash tool/bootstrap_android.sh
