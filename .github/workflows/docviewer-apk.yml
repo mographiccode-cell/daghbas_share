@@ -2,6 +2,8 @@ name: docviewer-apk-build
 on:
   push:
     branches: [docviewer-apk-build-20260821]
+  pull_request:
+    branches: [main]
 permissions:
   contents: read
 jobs:
