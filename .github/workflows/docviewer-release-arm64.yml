@@ -1,0 +1,83 @@
+name: temporary-docviewer-arm64-release
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build-release:
+    if: github.head_ref == 'docviewer-apk-build-20260821'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.7'
+          channel: stable
+          cache: true
+      - name: Reconstruct project
+        run: |
+          mkdir -p docviewer_build
+          cat docviewer_apk_payload/part*.b64 | base64 -d > /tmp/docviewer.tar.gz
+          tar -xzf /tmp/docviewer.tar.gz -C docviewer_build
+          touch docviewer_build/README.md
+          cp docviewer_apk_payload/patch/document_item.dart docviewer_build/lib/models/document_item.dart
+          sed -i '/allowMultiple: true,/d' docviewer_build/lib/services/file_service.dart
+      - name: Bootstrap Android project
+        working-directory: docviewer_build
+        run: bash tool/bootstrap_android.sh
+      - name: Patch Android release compatibility
+        working-directory: docviewer_build
+        run: |
+          plugin_dir="$PUB_CACHE/hosted/pub.dev/doc_viewer-0.0.3"
+          grep -RIl 'com.github.barteksc:android-pdf-viewer:2.8.2' "$plugin_dir" | while read -r f; do
+            sed -i 's#com.github.barteksc:android-pdf-viewer:2.8.2#com.github.mhiew:android-pdf-viewer:3.2.0-beta.3#g' "$f"
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('android/app/build.gradle.kts')
+          s = p.read_text()
+          s = re.sub(r'(?m)^(\s*)compileSdk\s*=.*$', r'\1compileSdk = 37', s)
+          s = re.sub(r'(?m)^(\s*)minSdk\s*=.*$', r'\1minSdk = 26', s)
+          marker = '        targetCompatibility = JavaVersion.VERSION_17\n'
+          if 'isCoreLibraryDesugaringEnabled = true' not in s:
+              s = s.replace(marker, marker + '        isCoreLibraryDesugaringEnabled = true\n')
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")' not in s:
+              s += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")\n}\n'
+          p.write_text(s)
+          assert re.search(r'(?m)^\s*minSdk\s*=\s*26\s*$', s)
+          assert re.search(r'(?m)^\s*compileSdk\s*=\s*37\s*$', s)
+          PY
+      - name: Analyze
+        working-directory: docviewer_build
+        run: |
+          rm -f test/widget_test.dart
+          flutter analyze --fatal-infos
+      - name: Build optimized ARM64 release APK
+        working-directory: docviewer_build
+        run: |
+          flutter build apk --release --target-platform android-arm64 --split-per-abi --obfuscate --split-debug-info=build/symbols
+      - name: Verify release APK
+        working-directory: docviewer_build
+        run: |
+          APK=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          test -s "$APK"
+          unzip -t "$APK" >/dev/null
+          sha256sum "$APK" | tee "$APK.sha256"
+          ls -lh "$APK"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('build/app/outputs/flutter-apk/app-arm64-v8a-release.apk')
+          print(f'APK_BYTES={p.stat().st_size}')
+          print(f'APK_MIB={p.stat().st_size/1024/1024:.2f}')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: UniversalDocViewer-ARM64-Release
+          path: |
+            docviewer_build/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            docviewer_build/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk.sha256
+          if-no-files-found: error
+          retention-days: 7
