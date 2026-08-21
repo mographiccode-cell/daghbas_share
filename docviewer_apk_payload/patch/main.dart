@@ -13,33 +13,107 @@ class UniversalDocApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const seed = Color(0xFF3157C8);
-    final lightScheme = ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.light);
-    final darkScheme = ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark);
+    const seed = Color(0xFF1F63E9);
+    final lightScheme = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: Brightness.light,
+      surface: const Color(0xFFF7F9FD),
+    );
+    final darkScheme = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: Brightness.dark,
+    );
 
-    ThemeData theme(ColorScheme scheme) => ThemeData(
-          useMaterial3: true,
-          colorScheme: scheme,
-          visualDensity: VisualDensity.standard,
-          scaffoldBackgroundColor: scheme.brightness == Brightness.light ? const Color(0xFFF6F7FB) : const Color(0xFF101217),
-          appBarTheme: const AppBarTheme(centerTitle: false, backgroundColor: Colors.transparent, surfaceTintColor: Colors.transparent),
-          cardTheme: CardThemeData(
-            color: scheme.brightness == Brightness.light ? Colors.white : scheme.surfaceContainerLow,
-            surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+    ThemeData theme(ColorScheme scheme) {
+      final light = scheme.brightness == Brightness.light;
+      return ThemeData(
+        useMaterial3: true,
+        colorScheme: scheme,
+        visualDensity: VisualDensity.standard,
+        scaffoldBackgroundColor: light ? const Color(0xFFF4F7FC) : const Color(0xFF0F1218),
+        appBarTheme: AppBarTheme(
+          centerTitle: false,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          titleTextStyle: TextStyle(
+            color: scheme.onSurface,
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
           ),
-          searchBarTheme: SearchBarThemeData(
-            elevation: const WidgetStatePropertyAll(0),
-            backgroundColor: WidgetStatePropertyAll(scheme.surfaceContainerHighest.withValues(alpha: .68)),
-            shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+        ),
+        cardTheme: CardThemeData(
+          elevation: 0,
+          color: light ? Colors.white : scheme.surfaceContainerLow,
+          surfaceTintColor: Colors.transparent,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        ),
+        searchBarTheme: SearchBarThemeData(
+          elevation: const WidgetStatePropertyAll(0),
+          backgroundColor: WidgetStatePropertyAll(
+            light ? Colors.white : scheme.surfaceContainerHigh,
           ),
-        );
+          hintStyle: WidgetStatePropertyAll(
+            TextStyle(color: scheme.onSurfaceVariant, fontSize: 14),
+          ),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: scheme.outlineVariant.withValues(alpha: .45)),
+            ),
+          ),
+          padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: 16),
+          ),
+        ),
+        navigationBarTheme: NavigationBarThemeData(
+          height: 70,
+          elevation: 0,
+          backgroundColor: light ? Colors.white : scheme.surfaceContainerLow,
+          indicatorColor: scheme.primaryContainer,
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            final selected = states.contains(WidgetState.selected);
+            return TextStyle(
+              fontSize: 12,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected ? scheme.primary : scheme.onSurfaceVariant,
+            );
+          }),
+        ),
+        chipTheme: ChipThemeData(
+          side: BorderSide(color: scheme.outlineVariant.withValues(alpha: .55)),
+          selectedColor: scheme.primaryContainer,
+          backgroundColor: light ? Colors.white : scheme.surfaceContainerLow,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          labelStyle: TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w600),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+          ),
+        ),
+        floatingActionButtonTheme: FloatingActionButtonThemeData(
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        ),
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      );
+    }
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'مستنداتي',
       locale: const Locale('ar'),
-      builder: (context, child) => Directionality(textDirection: TextDirection.rtl, child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: child ?? const SizedBox.shrink(),
+      ),
       theme: theme(lightScheme),
       darkTheme: theme(darkScheme),
       themeMode: ThemeMode.system,
