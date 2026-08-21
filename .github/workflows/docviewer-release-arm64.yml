@@ -110,6 +110,22 @@ jobs:
           assert re.search(r'(?m)^\s*minSdk\s*=\s*26\s*$', s)
           assert re.search(r'(?m)^\s*compileSdk\s*=\s*37\s*$', s)
           assert 'applicationId = "com.mographiccode.mustanadati"' in s
+
+          m = Path('android/app/src/main/AndroidManifest.xml')
+          manifest = m.read_text()
+          if 'xmlns:tools=' not in manifest:
+              manifest = manifest.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android"', '<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n    xmlns:tools="http://schemas.android.com/tools"')
+          removals = [
+              'android.permission.READ_MEDIA_IMAGES',
+              'android.permission.READ_MEDIA_VIDEO',
+              'android.permission.READ_MEDIA_AUDIO',
+          ]
+          marker = '<application'
+          for permission in removals:
+              node = f'    <uses-permission android:name="{permission}" tools:node="remove" />\n'
+              if node.strip() not in manifest:
+                  manifest = manifest.replace(marker, node + marker, 1)
+          m.write_text(manifest)
           PY
 
       - name: Analyze
@@ -166,7 +182,8 @@ jobs:
           UNSIGNED=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           ALIGNED=build/app/outputs/flutter-apk/mustanadati-aligned.apk
           FINAL=build/app/outputs/flutter-apk/Mustanadati-v2.3.0-Final-ARM64.apk
-          PASS='MstFinal_2026_Installable'
+          PASS="$(openssl rand -hex 24)"
+          echo "::add-mask::$PASS"
           KS=/tmp/mustanadati-final-release.jks
           KEY_ALIAS=mustanadati
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
@@ -186,11 +203,16 @@ jobs:
             --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
             --out "$FINAL" "$ALIGNED"
           "$APKSIGNER" verify --verbose --print-certs "$FINAL" | tee build/app/outputs/flutter-apk/signing-verification.txt
+          grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' build/app/outputs/flutter-apk/signing-verification.txt
+          grep -q 'Verified using v3 scheme (APK Signature Scheme v3): true' build/app/outputs/flutter-apk/signing-verification.txt
           "$ZIPALIGN" -c -P 16 -v 4 "$FINAL" >/dev/null
           "$AAPT" dump badging "$FINAL" | tee build/app/outputs/flutter-apk/badging.txt
-          grep -q "package: name='com.mographiccode.mustanadati' versionCode='5' versionName='2.3.0'" build/app/outputs/flutter-apk/badging.txt
+          grep -q "package: name='com.mographiccode.mustanadati' versionCode='2005' versionName='2.3.0'" build/app/outputs/flutter-apk/badging.txt
           grep -q "sdkVersion:'26'" build/app/outputs/flutter-apk/badging.txt
           grep -q "native-code: 'arm64-v8a'" build/app/outputs/flutter-apk/badging.txt
+          ! grep -q 'android.permission.READ_MEDIA_IMAGES' build/app/outputs/flutter-apk/badging.txt
+          ! grep -q 'android.permission.READ_MEDIA_VIDEO' build/app/outputs/flutter-apk/badging.txt
+          ! grep -q 'android.permission.READ_MEDIA_AUDIO' build/app/outputs/flutter-apk/badging.txt
           unzip -t "$FINAL" >/dev/null
           unzip -l "$FINAL" | grep 'lib/arm64-v8a/' >/dev/null
           ! unzip -l "$FINAL" | grep -E 'lib/(x86_64|armeabi-v7a)/'
