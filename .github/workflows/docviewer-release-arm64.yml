@@ -16,6 +16,7 @@ jobs:
           flutter-version: '3.44.7'
           channel: stable
           cache: true
+
       - name: Reconstruct proven project
         run: |
           mkdir -p docviewer_build
@@ -32,6 +33,7 @@ jobs:
           rm -f docviewer_build/lib/services/document_viewer_service.dart
           ! grep -R "openDocument(" -n docviewer_build/lib
           grep -q 'DocViewerView' docviewer_build/lib/screens/viewer_screen.dart
+
       - name: Add recent documents UX
         working-directory: docviewer_build
         run: |
@@ -60,9 +62,11 @@ jobs:
           assert 'bool recentOnly = false;' in s
           assert "label: const Text('الأخيرة')" in s
           PY
+
       - name: Bootstrap Android project
         working-directory: docviewer_build
         run: bash tool/bootstrap_android.sh
+
       - name: Apply adaptive launcher icon
         working-directory: docviewer_build
         run: |
@@ -81,7 +85,8 @@ jobs:
           PY
           grep -q 'android:roundIcon="@mipmap/ic_launcher_round"' android/app/src/main/AndroidManifest.xml
           test -s android/app/src/main/res/drawable/ic_launcher_foreground.xml
-      - name: Patch Android release compatibility
+
+      - name: Patch Android release compatibility and final package identity
         working-directory: docviewer_build
         run: |
           plugin_dir="$PUB_CACHE/hosted/pub.dev/doc_viewer-0.0.3"
@@ -95,6 +100,7 @@ jobs:
           s = p.read_text()
           s = re.sub(r'(?m)^(\s*)compileSdk\s*=.*$', r'\1compileSdk = 37', s)
           s = re.sub(r'(?m)^(\s*)minSdk\s*=.*$', r'\1minSdk = 26', s)
+          s = re.sub(r'(?m)^(\s*)applicationId\s*=.*$', r'\1applicationId = "com.mographiccode.mustanadati"', s)
           marker = '        targetCompatibility = JavaVersion.VERSION_17\n'
           if 'isCoreLibraryDesugaringEnabled = true' not in s:
               s = s.replace(marker, marker + '        isCoreLibraryDesugaringEnabled = true\n')
@@ -103,12 +109,15 @@ jobs:
           p.write_text(s)
           assert re.search(r'(?m)^\s*minSdk\s*=\s*26\s*$', s)
           assert re.search(r'(?m)^\s*compileSdk\s*=\s*37\s*$', s)
+          assert 'applicationId = "com.mographiccode.mustanadati"' in s
           PY
+
       - name: Analyze
         working-directory: docviewer_build
         run: |
           rm -f test/widget_test.dart
           flutter analyze --fatal-infos
+
       - name: Unit tests
         working-directory: docviewer_build
         run: |
@@ -133,12 +142,10 @@ jobs:
               item('project', 'docx'),
               item('budget', 'xlsx'),
             ];
-
-            test('search filters by name and favorites', () {
+            test('search and favorites work', () {
               expect(DocumentFilter.apply(docs, query: 'project').single.kind, DocumentKind.word);
               expect(DocumentFilter.apply(docs, favoritesOnly: true).single.name, 'report.pdf');
             });
-
             test('kind filter isolates Excel', () {
               final result = DocumentFilter.apply(docs, kind: DocumentKind.excel);
               expect(result.length, 1);
@@ -147,31 +154,63 @@ jobs:
           }
           DART
           flutter test test/document_filter_test.dart
-      - name: Build optimized ARM64 release APK
+
+      - name: Build optimized unsigned ARM64 release APK
         working-directory: docviewer_build
         run: flutter build apk --release --target-platform android-arm64 --split-per-abi --obfuscate --split-debug-info=build/symbols
-      - name: Verify final APK
+
+      - name: Align, sign and verify installable APK
         working-directory: docviewer_build
         run: |
-          APK=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-          test -s "$APK"
-          unzip -t "$APK" >/dev/null
-          unzip -l "$APK" | grep 'lib/arm64-v8a/' >/dev/null
-          ! unzip -l "$APK" | grep -E 'lib/(x86_64|armeabi-v7a)/'
-          ! unzip -l "$APK" | grep 'kernel_blob.bin'
-          sha256sum "$APK" | tee "$APK.sha256"
-          ls -lh "$APK"
+          set -euo pipefail
+          UNSIGNED=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          ALIGNED=build/app/outputs/flutter-apk/mustanadati-aligned.apk
+          FINAL=build/app/outputs/flutter-apk/Mustanadati-v2.3.0-Final-ARM64.apk
+          PASS='MstFinal_2026_Installable'
+          KS=/tmp/mustanadati-final-release.jks
+          KEY_ALIAS=mustanadati
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
+          ZIPALIGN="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name zipalign | sort -V | tail -1)"
+          AAPT="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
+          test -x "$APKSIGNER"
+          test -x "$ZIPALIGN"
+          test -x "$AAPT"
+          keytool -genkeypair -noprompt \
+            -keystore "$KS" -storepass "$PASS" -keypass "$PASS" \
+            -alias "$KEY_ALIAS" -keyalg RSA -keysize 4096 -validity 3650 \
+            -dname 'CN=Mustanadati, OU=Android, O=Mographiccode, L=Sanaa, C=YE'
+          "$ZIPALIGN" -P 16 -f 4 "$UNSIGNED" "$ALIGNED"
+          "$APKSIGNER" sign \
+            --ks "$KS" --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass "pass:$PASS" --key-pass "pass:$PASS" \
+            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
+            --out "$FINAL" "$ALIGNED"
+          "$APKSIGNER" verify --verbose --print-certs "$FINAL" | tee build/app/outputs/flutter-apk/signing-verification.txt
+          "$ZIPALIGN" -c -P 16 -v 4 "$FINAL" >/dev/null
+          "$AAPT" dump badging "$FINAL" | tee build/app/outputs/flutter-apk/badging.txt
+          grep -q "package: name='com.mographiccode.mustanadati' versionCode='5' versionName='2.3.0'" build/app/outputs/flutter-apk/badging.txt
+          grep -q "sdkVersion:'26'" build/app/outputs/flutter-apk/badging.txt
+          grep -q "native-code: 'arm64-v8a'" build/app/outputs/flutter-apk/badging.txt
+          unzip -t "$FINAL" >/dev/null
+          unzip -l "$FINAL" | grep 'lib/arm64-v8a/' >/dev/null
+          ! unzip -l "$FINAL" | grep -E 'lib/(x86_64|armeabi-v7a)/'
+          ! unzip -l "$FINAL" | grep 'kernel_blob.bin'
+          sha256sum "$FINAL" | tee "$FINAL.sha256"
+          ls -lh "$FINAL"
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('build/app/outputs/flutter-apk/app-arm64-v8a-release.apk')
+          p=Path('build/app/outputs/flutter-apk/Mustanadati-v2.3.0-Final-ARM64.apk')
           print(f'APK_BYTES={p.stat().st_size}')
           print(f'APK_MIB={p.stat().st_size/1024/1024:.2f}')
           PY
+
       - uses: actions/upload-artifact@v4
         with:
-          name: UniversalDocViewer-v2.2-Final-ARM64
+          name: Mustanadati-v2.3.0-Final-Signed-ARM64
           path: |
-            docviewer_build/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-            docviewer_build/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk.sha256
+            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.3.0-Final-ARM64.apk
+            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.3.0-Final-ARM64.apk.sha256
+            docviewer_build/build/app/outputs/flutter-apk/signing-verification.txt
+            docviewer_build/build/app/outputs/flutter-apk/badging.txt
           if-no-files-found: error
           retention-days: 7
