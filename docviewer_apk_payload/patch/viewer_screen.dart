@@ -97,9 +97,6 @@ class _DocxViewer extends StatelessWidget {
             'Roboto',
           ],
         ),
-        onError: (error) {
-          debugPrint('DOCX render error: $error');
-        },
       ),
     );
   }
