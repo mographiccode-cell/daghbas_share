@@ -1,1 +1,1 @@
-trigger signed installable final v2.3.0 package identity signing verification 2026-08-21
+trigger final signed v2.3.0 corrected versionCode media permissions verification 2026-08-21
