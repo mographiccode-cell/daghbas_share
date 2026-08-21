@@ -30,22 +30,27 @@ jobs:
       - name: Patch Android production compatibility
         working-directory: docviewer_build
         run: |
-          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 37/' android/app/build.gradle.kts
-          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 26/' android/app/build.gradle.kts
           plugin_dir="$PUB_CACHE/hosted/pub.dev/doc_viewer-0.0.3"
           grep -RIl 'com.github.barteksc:android-pdf-viewer:2.8.2' "$plugin_dir" | while read -r f; do
             sed -i 's#com.github.barteksc:android-pdf-viewer:2.8.2#com.github.mhiew:android-pdf-viewer:3.2.0-beta.3#g' "$f"
           done
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p = Path('android/app/build.gradle.kts')
           s = p.read_text()
+          s = re.sub(r'(?m)^(\s*)compileSdk\s*=.*$', r'\1compileSdk = 37', s)
+          s = re.sub(r'(?m)^(\s*)minSdk\s*=.*$', r'\1minSdk = 26', s)
           marker = '        targetCompatibility = JavaVersion.VERSION_17\n'
           if 'isCoreLibraryDesugaringEnabled = true' not in s:
               s = s.replace(marker, marker + '        isCoreLibraryDesugaringEnabled = true\n')
           if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")' not in s:
               s += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")\n}\n'
           p.write_text(s)
+          if not re.search(r'(?m)^\s*minSdk\s*=\s*26\s*$', s):
+              raise SystemExit('minSdk patch failed')
+          if not re.search(r'(?m)^\s*compileSdk\s*=\s*37\s*$', s):
+              raise SystemExit('compileSdk patch failed')
           PY
           grep -n 'compileSdk\|minSdk\|isCoreLibraryDesugaringEnabled\|coreLibraryDesugaring' android/app/build.gradle.kts
           grep -R 'com.github.mhiew:android-pdf-viewer:3.2.0-beta.3' "$plugin_dir/android"
