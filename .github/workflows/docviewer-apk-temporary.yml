@@ -1,0 +1,45 @@
+name: temporary-docviewer-apk-build
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build-apk:
+    if: github.head_ref == 'docviewer-apk-build-20260821'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.7'
+          channel: stable
+          cache: true
+      - name: Reconstruct project
+        run: |
+          mkdir -p docviewer_build
+          cat docviewer_apk_payload/part*.b64 | base64 -d > /tmp/docviewer.tar.gz
+          tar -xzf /tmp/docviewer.tar.gz -C docviewer_build
+      - name: Bootstrap Android project
+        working-directory: docviewer_build
+        run: bash tool/bootstrap_android.sh
+      - name: Analyze
+        working-directory: docviewer_build
+        run: flutter analyze --fatal-infos
+      - name: Build installable debug APK
+        working-directory: docviewer_build
+        run: flutter build apk --debug
+      - name: Verify APK
+        working-directory: docviewer_build
+        run: |
+          test -s build/app/outputs/flutter-apk/app-debug.apk
+          sha256sum build/app/outputs/flutter-apk/app-debug.apk | tee build/app/outputs/flutter-apk/app-debug.apk.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: UniversalDocViewer-Android-Debug
+          path: |
+            docviewer_build/build/app/outputs/flutter-apk/app-debug.apk
+            docviewer_build/build/app/outputs/flutter-apk/app-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 7
