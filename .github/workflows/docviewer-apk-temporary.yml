@@ -27,6 +27,15 @@ jobs:
       - name: Bootstrap Android project
         working-directory: docviewer_build
         run: bash tool/bootstrap_android.sh
+      - name: Patch Android SDK and stale PDF transitive dependency
+        working-directory: docviewer_build
+        run: |
+          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 37/' android/app/build.gradle.kts
+          plugin_dir="$PUB_CACHE/hosted/pub.dev/doc_viewer-0.0.3"
+          grep -RIl 'com.github.barteksc:android-pdf-viewer:2.8.2' "$plugin_dir" | while read -r f; do
+            sed -i 's#com.github.barteksc:android-pdf-viewer:2.8.2#com.github.mhiew:android-pdf-viewer:3.2.0-beta.3#g' "$f"
+          done
+          grep -R 'com.github.mhiew:android-pdf-viewer:3.2.0-beta.3' "$plugin_dir/android"
       - name: Analyze
         working-directory: docviewer_build
         run: |
@@ -40,6 +49,7 @@ jobs:
         run: |
           test -s build/app/outputs/flutter-apk/app-debug.apk
           sha256sum build/app/outputs/flutter-apk/app-debug.apk | tee build/app/outputs/flutter-apk/app-debug.apk.sha256
+          unzip -t build/app/outputs/flutter-apk/app-debug.apk >/dev/null
       - uses: actions/upload-artifact@v4
         with:
           name: UniversalDocViewer-Android-Debug
