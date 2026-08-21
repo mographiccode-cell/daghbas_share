@@ -1,1 +1,1 @@
-trigger optimized arm64 release 2026-08-21
+trigger fixed Office DocViewerView + UX release 2026-08-21
