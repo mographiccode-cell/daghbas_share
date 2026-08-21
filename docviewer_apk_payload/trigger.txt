@@ -1,1 +1,1 @@
-trigger high fidelity docx paged layout v2.4.0 2026-08-21
+trigger Mustanadati v2.5.0 redesign word toolbar safe adaptive icon 2026-08-21
