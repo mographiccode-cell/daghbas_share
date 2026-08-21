@@ -27,7 +27,7 @@ jobs:
       - name: Bootstrap Android project
         working-directory: docviewer_build
         run: bash tool/bootstrap_android.sh
-      - name: Patch Android SDK and stale PDF transitive dependency
+      - name: Patch Android production compatibility
         working-directory: docviewer_build
         run: |
           sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 37/' android/app/build.gradle.kts
@@ -35,6 +35,18 @@ jobs:
           grep -RIl 'com.github.barteksc:android-pdf-viewer:2.8.2' "$plugin_dir" | while read -r f; do
             sed -i 's#com.github.barteksc:android-pdf-viewer:2.8.2#com.github.mhiew:android-pdf-viewer:3.2.0-beta.3#g' "$f"
           done
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/build.gradle.kts')
+          s = p.read_text()
+          marker = '        targetCompatibility = JavaVersion.VERSION_17\n'
+          if 'isCoreLibraryDesugaringEnabled = true' not in s:
+              s = s.replace(marker, marker + '        isCoreLibraryDesugaringEnabled = true\n')
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")' not in s:
+              s += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")\n}\n'
+          p.write_text(s)
+          PY
+          grep -n 'compileSdk\|isCoreLibraryDesugaringEnabled\|coreLibraryDesugaring' android/app/build.gradle.kts
           grep -R 'com.github.mhiew:android-pdf-viewer:3.2.0-beta.3' "$plugin_dir/android"
       - name: Analyze
         working-directory: docviewer_build
