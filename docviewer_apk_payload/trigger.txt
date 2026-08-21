@@ -1,1 +1,1 @@
-trigger safe final v2.2 adaptive icon recent filter 2026-08-21
+trigger final v2.2 adaptive icon recent filter tests 2026-08-21
