@@ -1,1 +1,1 @@
-trigger final v2.2 icon recent favorites details 2026-08-21
+trigger safe final v2.2 adaptive icon recent filter 2026-08-21
