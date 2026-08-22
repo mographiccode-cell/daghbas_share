@@ -343,7 +343,9 @@ class LocalShareService extends ChangeNotifier {
       await for (final chunk in request) {
         sink.add(chunk);
         received += chunk.length;
-        if (transfer.totalBytes > 0) transfer.progress = (received / transfer.totalBytes).clamp(0, 1);
+        if (transfer.totalBytes > 0) {
+          transfer.progress = (received / transfer.totalBytes).clamp(0.0, 1.0).toDouble();
+        }
         final now = DateTime.now();
         if (now.difference(lastNotify) > const Duration(milliseconds: 120)) {
           lastNotify = now;
@@ -518,7 +520,7 @@ class LocalShareService extends ChangeNotifier {
       var lastNotify = DateTime.fromMillisecondsSinceEpoch(0);
       final stream = file.openRead().map((chunk) {
         sent += chunk.length;
-        transfer.progress = total == 0 ? 1 : (sent / total).clamp(0, 1);
+        transfer.progress = total == 0 ? 1.0 : (sent / total).clamp(0.0, 1.0).toDouble();
         final now = DateTime.now();
         if (now.difference(lastNotify) > const Duration(milliseconds: 120)) {
           lastNotify = now;
