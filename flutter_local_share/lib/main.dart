@@ -16,34 +16,29 @@ class LocalShareApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const seed = Color(0xFF3569F2);
+    const seed = Color(0xFF1769E0);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'LocalShare',
       locale: const Locale('ar'),
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.light),
-        scaffoldBackgroundColor: const Color(0xFFF7F8FC),
-        cardTheme: const CardThemeData(
-          elevation: 0,
-          margin: EdgeInsets.zero,
-          clipBehavior: Clip.antiAlias,
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: seed),
+        scaffoldBackgroundColor: const Color(0xFFF5F7FB),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide.none,
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFFE5E8F0)),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFFE2E7F0)),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: seed, width: 1.6),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: seed, width: 1.5),
           ),
         ),
       ),
@@ -64,7 +59,7 @@ class LocalShareShell extends StatefulWidget {
 
 class _LocalShareShellState extends State<LocalShareShell> {
   late final LocalShareService service;
-  int pageIndex = 0;
+  String? selectedPeerId;
 
   @override
   void initState() {
@@ -79,6 +74,16 @@ class _LocalShareShellState extends State<LocalShareShell> {
     super.dispose();
   }
 
+  Peer? get selectedPeer {
+    final id = selectedPeerId;
+    if (id == null) return null;
+    return service.peerFor(id);
+  }
+
+  void _selectPeer(Peer peer) {
+    setState(() => selectedPeerId = peer.deviceId);
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -90,10 +95,10 @@ class _LocalShareShellState extends State<LocalShareShell> {
         if (service.startupError != null) {
           return Scaffold(
             body: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
                   child: _ErrorCard(message: service.startupError!),
                 ),
               ),
@@ -101,187 +106,177 @@ class _LocalShareShellState extends State<LocalShareShell> {
           );
         }
 
-        final wide = MediaQuery.sizeOf(context).width >= 850;
-        final pages = [
-          _HomePage(service: service),
-          _ReceivedPage(service: service),
-          _SettingsPage(service: service),
-        ];
-
-        if (wide) {
-          return Scaffold(
-            body: SafeArea(
-              child: Row(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: NavigationRail(
-                      backgroundColor: Colors.white,
-                      selectedIndex: pageIndex,
-                      onDestinationSelected: (value) => setState(() => pageIndex = value),
-                      labelType: NavigationRailLabelType.all,
-                      leading: const Padding(
-                        padding: EdgeInsets.only(bottom: 18),
-                        child: _AppMark(),
-                      ),
-                      destinations: const [
-                        NavigationRailDestination(
-                          icon: Icon(Icons.devices_outlined),
-                          selectedIcon: Icon(Icons.devices_rounded),
-                          label: Text('الأجهزة'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.folder_copy_outlined),
-                          selectedIcon: Icon(Icons.folder_copy_rounded),
-                          label: Text('المستلمة'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.settings_outlined),
-                          selectedIcon: Icon(Icons.settings_rounded),
-                          label: Text('الإعدادات'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const VerticalDivider(width: 1),
-                  Expanded(child: pages[pageIndex]),
-                ],
-              ),
-            ),
-          );
-        }
+        final width = MediaQuery.sizeOf(context).width;
+        final wide = width >= 860;
+        final peer = selectedPeer;
 
         return Scaffold(
-          body: SafeArea(child: pages[pageIndex]),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: pageIndex,
-            onDestinationSelected: (value) => setState(() => pageIndex = value),
-            destinations: const [
-              NavigationDestination(icon: Icon(Icons.devices_outlined), selectedIcon: Icon(Icons.devices), label: 'الأجهزة'),
-              NavigationDestination(icon: Icon(Icons.folder_copy_outlined), selectedIcon: Icon(Icons.folder_copy), label: 'المستلمة'),
-              NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'الإعدادات'),
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            surfaceTintColor: Colors.white,
+            titleSpacing: 16,
+            title: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _AppMark(),
+                SizedBox(width: 10),
+                Text('LocalShare', style: TextStyle(fontWeight: FontWeight.w800)),
+              ],
+            ),
+            actions: [
+              IconButton(
+                tooltip: 'تعديل اسم الجهاز',
+                onPressed: () => _showDeviceNameDialog(context, service),
+                icon: const Icon(Icons.edit_outlined),
+              ),
+              IconButton(
+                tooltip: 'ربط يدوي عبر IP',
+                onPressed: () => _showManualIpDialog(context, service),
+                icon: const Icon(Icons.add_link_rounded),
+              ),
+              const SizedBox(width: 8),
             ],
           ),
+          body: wide
+              ? Row(
+                  children: [
+                    SizedBox(
+                      width: 360,
+                      child: _DevicesPane(
+                        service: service,
+                        selectedPeerId: selectedPeerId,
+                        onPeerSelected: _selectPeer,
+                      ),
+                    ),
+                    const VerticalDivider(width: 1),
+                    Expanded(
+                      child: peer == null
+                          ? const _NoChatSelected()
+                          : _ChatPane(service: service, peer: peer),
+                    ),
+                  ],
+                )
+              : peer == null
+                  ? _DevicesPane(
+                      service: service,
+                      selectedPeerId: selectedPeerId,
+                      onPeerSelected: _selectPeer,
+                    )
+                  : _ChatPane(
+                      service: service,
+                      peer: peer,
+                      onBack: () => setState(() => selectedPeerId = null),
+                    ),
         );
       },
     );
   }
 }
 
-class _HomePage extends StatelessWidget {
-  const _HomePage({required this.service});
+class _DevicesPane extends StatelessWidget {
+  const _DevicesPane({
+    required this.service,
+    required this.selectedPeerId,
+    required this.onPeerSelected,
+  });
+
   final LocalShareService service;
+  final String? selectedPeerId;
+  final ValueChanged<Peer> onPeerSelected;
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-          sliver: SliverToBoxAdapter(child: _TopBar(service: service)),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-          sliver: SliverToBoxAdapter(child: _MyDeviceCard(service: service)),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 26, 20, 10),
-          sliver: SliverToBoxAdapter(
-            child: _SectionHeader(
-              title: 'الأجهزة القريبة',
-              subtitle: service.discoveryAvailable
-                  ? 'يتم البحث تلقائيًا داخل نفس شبكة Wi‑Fi'
-                  : 'الاكتشاف التلقائي غير متاح؛ استخدم الربط اليدوي',
-              trailing: TextButton.icon(
-                onPressed: () => _showManualIpDialog(context, service),
-                icon: const Icon(Icons.add_link_rounded),
-                label: const Text('ربط يدوي'),
+    final paired = service.pairedPeers;
+    final discoveredUnpaired = service.discoveredDevices
+        .where((device) => service.peerFor(device.deviceId) == null)
+        .toList();
+
+    return ColoredBox(
+      color: const Color(0xFFF8FAFD),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _MyDeviceCard(service: service),
+          const SizedBox(height: 22),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'الأجهزة المرتبطة',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFE3E8F0)),
+                ),
+                child: Text('${paired.length}'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (paired.isEmpty)
+            const _InfoBox(
+              icon: Icons.devices_other_rounded,
+              text: 'اربط الهاتف والكمبيوتر مرة واحدة، ثم افتح المحادثة لإرسال النصوص والروابط والملفات.',
+            )
+          else
+            ...paired.map(
+              (peer) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _PeerTile(
+                  peer: peer,
+                  online: service.isOnline(peer.deviceId),
+                  selected: selectedPeerId == peer.deviceId,
+                  onTap: () => onPeerSelected(peer),
+                  onForget: () => _confirmForget(context, service, peer),
+                ),
               ),
             ),
-          ),
-        ),
-        if (service.discoveredDevices.isEmpty)
-          const SliverPadding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverToBoxAdapter(child: _EmptyDevices()),
-          )
-        else
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverList.separated(
-              itemCount: service.discoveredDevices.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final device = service.discoveredDevices[index];
-                final peer = service.peerFor(device.deviceId);
-                return _DeviceCard(service: service, device: device, peer: peer);
-              },
-            ),
-          ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 28, 20, 10),
-          sliver: SliverToBoxAdapter(
-            child: _SectionHeader(
-              title: 'آخر عمليات النقل',
-              subtitle: 'الإرسال يتم مباشرة بين الجهازين بدون رفع الملفات للسحابة',
-            ),
-          ),
-        ),
-        if (service.transfers.isEmpty)
-          const SliverPadding(
-            padding: EdgeInsets.fromLTRB(20, 0, 20, 30),
-            sliver: SliverToBoxAdapter(child: _EmptyTransfers()),
-          )
-        else
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
-            sliver: SliverList.separated(
-              itemCount: service.transfers.take(12).length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (context, index) => _TransferTile(item: service.transfers[index]),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _TopBar extends StatelessWidget {
-  const _TopBar({required this.service});
-  final LocalShareService service;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const _AppMark(),
-        const SizedBox(width: 12),
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 18),
+          Row(
             children: [
-              Text('LocalShare', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 22)),
-              SizedBox(height: 2),
-              Text('مشاركة ملفات سريعة داخل الشبكة المحلية', style: TextStyle(color: Color(0xFF747B8E))),
+              const Expanded(
+                child: Text(
+                  'أجهزة قريبة جديدة',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                ),
+              ),
+              if (!service.discoveryAvailable)
+                const Tooltip(
+                  message: 'الاكتشاف التلقائي غير متاح؛ استخدم الربط اليدوي',
+                  child: Icon(Icons.info_outline_rounded, size: 20),
+                ),
             ],
           ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: const Color(0xFFEAF8EF),
-            borderRadius: BorderRadius.circular(30),
+          const SizedBox(height: 10),
+          if (discoveredUnpaired.isEmpty)
+            const Text(
+              'لا توجد أجهزة جديدة حاليًا على نفس شبكة Wi‑Fi.',
+              style: TextStyle(color: Color(0xFF667085)),
+            )
+          else
+            ...discoveredUnpaired.map(
+              (device) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _DiscoveredTile(
+                  device: device,
+                  onPair: () => _showPairDialog(context, service, device, onPeerSelected),
+                ),
+              ),
+            ),
+          const SizedBox(height: 22),
+          _InfoBox(
+            icon: Platform.isAndroid
+                ? Icons.phone_android_rounded
+                : Icons.laptop_windows_rounded,
+            text: service.receivePolicyLabel,
           ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.lock_outline_rounded, size: 16, color: Color(0xFF208A4B)),
-              SizedBox(width: 6),
-              Text('محلي', style: TextStyle(color: Color(0xFF208A4B), fontWeight: FontWeight.w700)),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -293,279 +288,81 @@ class _MyDeviceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF2E5EE8), Color(0xFF4D7CFA)]),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const [BoxShadow(color: Color(0x1A2E5EE8), blurRadius: 26, offset: Offset(0, 12))],
-      ),
-      padding: const EdgeInsets.all(20),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 560;
-          final identity = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: .16), borderRadius: BorderRadius.circular(14)),
-                    child: Icon(Platform.isWindows ? Icons.computer_rounded : Icons.smartphone_rounded, color: Colors.white),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(service.deviceName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18)),
-                        const SizedBox(height: 3),
-                        Text('IP: ${service.localIp}', style: TextStyle(color: Colors.white.withValues(alpha: .75))),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'تعديل الاسم',
-                    onPressed: () => _renameDevice(context, service),
-                    icon: const Icon(Icons.edit_outlined, color: Colors.white),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'افتح LocalShare على الجهاز الآخر ثم اختر هذا الجهاز وأدخل رمز الربط مرة واحدة فقط.',
-                style: TextStyle(color: Colors.white.withValues(alpha: .83), height: 1.45),
-              ),
-            ],
-          );
-          final code = Container(
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('رمز الربط', style: TextStyle(color: Color(0xFF70788B), fontSize: 12, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 4),
-                Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: SelectableText(service.pairCode, style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900, letterSpacing: 4)),
-                ),
-              ],
-            ),
-          );
-          if (compact) {
-            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [identity, const SizedBox(height: 16), code]);
-          }
-          return Row(children: [Expanded(child: identity), const SizedBox(width: 22), code]);
-        },
-      ),
-    );
-  }
-}
-
-class _DeviceCard extends StatelessWidget {
-  const _DeviceCard({required this.service, required this.device, required this.peer});
-  final LocalShareService service;
-  final DiscoveredDevice device;
-  final Peer? peer;
-
-  @override
-  Widget build(BuildContext context) {
-    final paired = peer != null;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE7EAF1)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(color: const Color(0xFFF0F4FF), borderRadius: BorderRadius.circular(14)),
-            child: const Icon(Icons.devices_rounded, color: Color(0xFF3569F2)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(child: Text(device.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16))),
-                    const SizedBox(width: 8),
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: const BoxDecoration(color: Color(0xFF33B86B), shape: BoxShape.circle),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 3),
-                Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: Text('${device.ip}:${device.port}', textAlign: TextAlign.left, style: const TextStyle(color: Color(0xFF7B8293), fontSize: 12)),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          if (paired)
-            FilledButton.icon(
-              onPressed: () => _sendFiles(context, service, peer!),
-              icon: const Icon(Icons.send_rounded, size: 18),
-              label: const Text('إرسال ملف'),
-            )
-          else
-            FilledButton.tonalIcon(
-              onPressed: () => _pair(context, service, device),
-              icon: const Icon(Icons.link_rounded, size: 18),
-              label: const Text('ربط'),
-            ),
-          if (paired) ...[
-            const SizedBox(width: 4),
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'forget') service.forgetPeer(device.deviceId);
-              },
-              itemBuilder: (_) => const [PopupMenuItem(value: 'forget', child: Text('نسيان الجهاز'))],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _TransferTile extends StatelessWidget {
-  const _TransferTile({required this.item});
-  final TransferItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    final sending = item.direction == TransferDirection.send;
-    final running = item.status == TransferStatus.running;
-    final failed = item.status == TransferStatus.failed;
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE9EBF2))),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: failed ? const Color(0xFFFFEEEE) : const Color(0xFFF0F4FF),
-            foregroundColor: failed ? Colors.red : const Color(0xFF3569F2),
-            child: Icon(failed ? Icons.error_outline : sending ? Icons.north_east_rounded : Icons.south_west_rounded),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 4),
-                Text(
-                  '${sending ? 'إلى' : 'من'} ${item.peerName} • ${formatBytes(item.totalBytes)}',
-                  style: const TextStyle(color: Color(0xFF7B8293), fontSize: 12),
-                ),
-                if (running) ...[
-                  const SizedBox(height: 9),
-                  LinearProgressIndicator(value: item.totalBytes > 0 ? item.progress : null, minHeight: 5, borderRadius: BorderRadius.circular(9)),
-                ],
-                if (failed && item.error != null) ...[
-                  const SizedBox(height: 5),
-                  Text(item.error!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.red, fontSize: 11)),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            failed ? 'فشل' : running ? '${(item.progress * 100).round()}%' : 'تم',
-            style: TextStyle(fontWeight: FontWeight.w800, color: failed ? Colors.red : running ? const Color(0xFF3569F2) : const Color(0xFF208A4B)),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0D5BD7), Color(0xFF16A6D9)],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1F0D5BD7),
+            blurRadius: 24,
+            offset: Offset(0, 10),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _ReceivedPage extends StatelessWidget {
-  const _ReceivedPage({required this.service});
-  final LocalShareService service;
-
-  @override
-  Widget build(BuildContext context) {
-    final refreshKey = '${service.transfers.length}-${service.transfers.where((e) => e.status == TransferStatus.completed).length}';
-    return Padding(
-      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _PageTitle(title: 'الملفات المستلمة', subtitle: 'كل الملفات تبقى محليًا على جهازك حتى تقوم بحذفها بنفسك.'),
-          const SizedBox(height: 18),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: const Color(0xFFEDF3FF), borderRadius: BorderRadius.circular(16)),
-            child: Row(
-              children: [
-                const Icon(Icons.folder_outlined, color: Color(0xFF3569F2)),
-                const SizedBox(width: 10),
-                Expanded(child: Text('مجلد الاستقبال: ${service.receiveDirectory.path}', maxLines: 2, overflow: TextOverflow.ellipsis)),
-                IconButton(
-                  tooltip: 'نسخ المسار',
-                  onPressed: () async {
-                    await Clipboard.setData(ClipboardData(text: service.receiveDirectory.path));
-                    if (context.mounted) _toast(context, 'تم نسخ المسار');
-                  },
-                  icon: const Icon(Icons.copy_rounded),
+          Row(
+            children: [
+              const Icon(Icons.shield_rounded, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  service.deviceName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
                 ),
-              ],
-            ),
+              ),
+              Text(
+                service.localIp,
+                textDirection: TextDirection.ltr,
+                style: const TextStyle(color: Color(0xFFDCEEFF), fontSize: 12),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: FutureBuilder<List<FileSystemEntity>>(
-              key: ValueKey(refreshKey),
-              future: service.receivedFiles(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-                final files = snapshot.data ?? const [];
-                if (files.isEmpty) {
-                  return const Center(child: _EmptyReceived());
-                }
-                return ListView.separated(
-                  itemCount: files.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 9),
-                  itemBuilder: (context, index) {
-                    final file = files[index] as File;
-                    final stat = file.statSync();
-                    return Container(
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE7EAF1))),
-                      child: ListTile(
-                        leading: const CircleAvatar(backgroundColor: Color(0xFFF0F4FF), child: Icon(Icons.insert_drive_file_outlined, color: Color(0xFF3569F2))),
-                        title: Text(file.uri.pathSegments.last, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
-                        subtitle: Text(formatBytes(stat.size)),
-                        trailing: FilledButton.tonalIcon(
-                          icon: const Icon(Icons.save_alt_rounded, size: 18),
-                          label: Text(Platform.isAndroid ? 'حفظ في التنزيلات' : 'حفظ نسخة'),
-                          onPressed: () async {
-                            try {
-                              final path = await service.exportReceivedFile(file);
-                              if (path.isNotEmpty && context.mounted) _toast(context, 'تم الحفظ بنجاح');
-                            } catch (e) {
-                              if (context.mounted) _toast(context, 'تعذر الحفظ: $e', error: true);
-                            }
-                          },
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+          const SizedBox(height: 15),
+          const Text(
+            'رمز الربط',
+            style: TextStyle(color: Color(0xFFDCEEFF), fontSize: 12),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              SelectableText(
+                service.pairCode,
+                textDirection: TextDirection.ltr,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 28,
+                  letterSpacing: 3,
+                ),
+              ),
+              const SizedBox(width: 10),
+              IconButton.filledTonal(
+                tooltip: 'نسخ الرمز',
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: service.pairCode));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('تم نسخ رمز الربط')),
+                  );
+                },
+                icon: const Icon(Icons.copy_rounded, size: 18),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'اكتب هذا الرمز في الجهاز الآخر. يتغير تلقائيًا كل 5 دقائق.',
+            style: TextStyle(color: Color(0xFFDCEEFF), fontSize: 11),
           ),
         ],
       ),
@@ -573,100 +370,552 @@ class _ReceivedPage extends StatelessWidget {
   }
 }
 
-class _SettingsPage extends StatelessWidget {
-  const _SettingsPage({required this.service});
-  final LocalShareService service;
+class _PeerTile extends StatelessWidget {
+  const _PeerTile({
+    required this.peer,
+    required this.online,
+    required this.selected,
+    required this.onTap,
+    required this.onForget,
+  });
+
+  final Peer peer;
+  final bool online;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback onForget;
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        const _PageTitle(title: 'الإعدادات', subtitle: 'إعدادات الربط والتخزين المحلي.'),
-        const SizedBox(height: 18),
-        _SettingsTile(
-          icon: Icons.badge_outlined,
-          title: 'اسم هذا الجهاز',
-          subtitle: service.deviceName,
-          onTap: () => _renameDevice(context, service),
-        ),
-        const SizedBox(height: 10),
-        _SettingsTile(
-          icon: Icons.lan_outlined,
-          title: 'عنوان الشبكة المحلي',
-          subtitle: '${service.localIp}:${LocalShareService.serverPort}',
-          onTap: () async {
-            await Clipboard.setData(ClipboardData(text: service.localIp));
-            if (context.mounted) _toast(context, 'تم نسخ عنوان IP');
-          },
-        ),
-        const SizedBox(height: 10),
-        _SettingsTile(
-          icon: Icons.folder_outlined,
-          title: 'مكان حفظ الملفات',
-          subtitle: service.receiveDirectory.path,
-          onTap: () async {
-            await Clipboard.setData(ClipboardData(text: service.receiveDirectory.path));
-            if (context.mounted) _toast(context, 'تم نسخ المسار');
-          },
-        ),
-        const SizedBox(height: 22),
-        const Text('الأجهزة المرتبطة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 10),
-        if (service.pairedPeers.isEmpty)
-          const Text('لا توجد أجهزة مرتبطة حتى الآن.', style: TextStyle(color: Color(0xFF747B8E)))
-        else
-          ...service.pairedPeers.map(
-            (peer) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Container(
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: const Color(0xFFE7EAF1))),
-                child: ListTile(
-                  leading: Icon(service.isOnline(peer.deviceId) ? Icons.link_rounded : Icons.link_off_rounded),
-                  title: Text(peer.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: Text(peer.ip),
-                  trailing: TextButton(onPressed: () => service.forgetPeer(peer.deviceId), child: const Text('نسيان')),
+    return Material(
+      color: selected ? const Color(0xFFEAF2FF) : Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: online
+                    ? const Color(0xFFE6F8EF)
+                    : const Color(0xFFF0F2F5),
+                child: Icon(
+                  Platform.isAndroid ? Icons.phone_android_rounded : Icons.devices_rounded,
+                  color: online ? const Color(0xFF128A50) : const Color(0xFF667085),
                 ),
               ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(peer.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text(
+                      online ? 'متصل الآن' : 'غير ظاهر حاليًا',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: online ? const Color(0xFF128A50) : const Color(0xFF667085),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'خيارات',
+                onSelected: (value) {
+                  if (value == 'forget') onForget();
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'forget', child: Text('إلغاء ربط الجهاز')),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DiscoveredTile extends StatelessWidget {
+  const _DiscoveredTile({required this.device, required this.onPair});
+  final DiscoveredDevice device;
+  final VoidCallback onPair;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE4E8F0)),
+      ),
+      child: Row(
+        children: [
+          const CircleAvatar(child: Icon(Icons.devices_rounded)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(device.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(
+                  device.ip,
+                  textDirection: TextDirection.ltr,
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF667085)),
+                ),
+              ],
             ),
           ),
-        const SizedBox(height: 26),
-        const _PrivacyNote(),
+          FilledButton.tonal(onPressed: onPair, child: const Text('ربط')),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatPane extends StatefulWidget {
+  const _ChatPane({required this.service, required this.peer, this.onBack});
+
+  final LocalShareService service;
+  final Peer peer;
+  final VoidCallback? onBack;
+
+  @override
+  State<_ChatPane> createState() => _ChatPaneState();
+}
+
+class _ChatPaneState extends State<_ChatPane> {
+  final TextEditingController controller = TextEditingController();
+  bool sending = false;
+
+  @override
+  void didUpdateWidget(covariant _ChatPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.peer.deviceId != widget.peer.deviceId) controller.clear();
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendText() async {
+    final text = controller.text.trim();
+    if (text.isEmpty || sending) return;
+    setState(() => sending = true);
+    try {
+      await widget.service.sendChat(widget.peer, text);
+      controller.clear();
+    } catch (e) {
+      if (mounted) _showError(context, e);
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
+  }
+
+  Future<void> _sendFiles() async {
+    if (sending) return;
+    setState(() => sending = true);
+    try {
+      await widget.service.pickAndSend(widget.peer);
+    } catch (e) {
+      if (mounted) _showError(context, e);
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final messages = widget.service.messagesFor(widget.peer.deviceId).reversed.toList();
+    final online = widget.service.isOnline(widget.peer.deviceId);
+    final activeTransfers = widget.service.transfers
+        .where((item) => item.status == TransferStatus.running)
+        .toList();
+
+    return Column(
+      children: [
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              if (widget.onBack != null)
+                IconButton(onPressed: widget.onBack, icon: const Icon(Icons.arrow_forward_rounded)),
+              CircleAvatar(
+                backgroundColor: online ? const Color(0xFFE6F8EF) : const Color(0xFFF0F2F5),
+                child: Icon(
+                  Icons.devices_rounded,
+                  color: online ? const Color(0xFF128A50) : const Color(0xFF667085),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.peer.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                    Text(
+                      online ? 'اتصال محلي مشفّر • متصل' : 'اتصال محلي مشفّر • بانتظار الجهاز',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF667085)),
+                    ),
+                  ],
+                ),
+              ),
+              const Tooltip(
+                message: 'الرسائل والملفات مشفّرة بين الجهازين',
+                child: Icon(Icons.lock_rounded, color: Color(0xFF128A50)),
+              ),
+            ],
+          ),
+        ),
+        if (activeTransfers.isNotEmpty)
+          Container(
+            color: const Color(0xFFEAF2FF),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'جارٍ نقل ${activeTransfers.first.fileName} • ${(activeTransfers.first.progress * 100).toStringAsFixed(0)}%',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        Expanded(
+          child: messages.isEmpty
+              ? const _EmptyChat()
+              : ListView.builder(
+                  reverse: true,
+                  padding: const EdgeInsets.fromLTRB(14, 18, 14, 18),
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) => _ChatBubble(
+                    service: widget.service,
+                    message: messages[index],
+                  ),
+                ),
+        ),
+        Container(
+          color: Colors.white,
+          padding: EdgeInsets.fromLTRB(
+            12,
+            10,
+            12,
+            10 + MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: SafeArea(
+            top: false,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                IconButton.filledTonal(
+                  tooltip: 'إرسال ملف',
+                  onPressed: sending ? null : _sendFiles,
+                  icon: const Icon(Icons.attach_file_rounded),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    minLines: 1,
+                    maxLines: 5,
+                    maxLength: 4096,
+                    textInputAction: TextInputAction.newline,
+                    decoration: const InputDecoration(
+                      hintText: 'اكتب رسالة أو الصق رابطًا…',
+                      counterText: '',
+                      contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  tooltip: 'إرسال',
+                  onPressed: sending ? null : _sendText,
+                  icon: sending
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send_rounded),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
 }
 
-class _SettingsTile extends StatelessWidget {
-  const _SettingsTile({required this.icon, required this.title, required this.subtitle, required this.onTap});
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
+class _ChatBubble extends StatelessWidget {
+  const _ChatBubble({required this.service, required this.message});
+  final LocalShareService service;
+  final ChatMessage message;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+    final mine = message.direction == ChatMessageDirection.send;
+    final align = mine ? Alignment.centerRight : Alignment.centerLeft;
+    final bubbleColor = mine ? const Color(0xFF1769E0) : Colors.white;
+    final foreground = mine ? Colors.white : const Color(0xFF182230);
+
+    return Align(
+      alignment: align,
       child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE7EAF1))),
-        child: Row(
+        constraints: const BoxConstraints(maxWidth: 560),
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: bubbleColor,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomLeft: Radius.circular(mine ? 18 : 5),
+            bottomRight: Radius.circular(mine ? 5 : 18),
+          ),
+          border: mine ? null : Border.all(color: const Color(0xFFE3E8F0)),
+        ),
+        child: message.kind == ChatMessageKind.file
+            ? _FileMessageContent(service: service, message: message, foreground: foreground)
+            : _TextMessageContent(service: service, message: message, foreground: foreground),
+      ),
+    );
+  }
+}
+
+class _TextMessageContent extends StatelessWidget {
+  const _TextMessageContent({
+    required this.service,
+    required this.message,
+    required this.foreground,
+  });
+
+  final LocalShareService service;
+  final ChatMessage message;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    final isLink = message.kind == ChatMessageKind.link;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SelectableText(
+          message.text,
+          textDirection: TextDirection.rtl,
+          style: TextStyle(color: foreground, height: 1.45),
+        ),
+        if (isLink) ...[
+          const SizedBox(height: 8),
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              foregroundColor: foreground,
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+            ),
+            onPressed: () async {
+              try {
+                await service.openLink(message.text);
+              } catch (e) {
+                if (context.mounted) _showError(context, e);
+              }
+            },
+            icon: const Icon(Icons.open_in_new_rounded, size: 17),
+            label: const Text('فتح الرابط'),
+          ),
+        ],
+        const SizedBox(height: 5),
+        Text(
+          _formatTime(message.sentAt),
+          style: TextStyle(color: foreground.withValues(alpha: 0.68), fontSize: 10),
+        ),
+      ],
+    );
+  }
+}
+
+class _FileMessageContent extends StatelessWidget {
+  const _FileMessageContent({
+    required this.service,
+    required this.message,
+    required this.foreground,
+  });
+
+  final LocalShareService service;
+  final ChatMessage message;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    final incomingWindowsTemp = Platform.isWindows &&
+        message.isIncoming &&
+        message.temporary &&
+        !message.savedPermanently;
+    final androidPermanent = Platform.isAndroid && message.isIncoming && message.savedPermanently;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(backgroundColor: const Color(0xFFF0F4FF), child: Icon(icon, color: const Color(0xFF3569F2))),
-            const SizedBox(width: 12),
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: foreground.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.insert_drive_file_rounded, color: foreground),
+            ),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 3),
-                  Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF747B8E), fontSize: 12)),
+                  Text(
+                    message.fileName ?? 'ملف',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: foreground, fontWeight: FontWeight.w800),
+                  ),
+                  if (message.fileSize != null)
+                    Text(
+                      formatBytes(message.fileSize!),
+                      style: TextStyle(color: foreground.withValues(alpha: 0.72), fontSize: 11),
+                    ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_left_rounded),
+          ],
+        ),
+        if (incomingWindowsTemp) ...[
+          const SizedBox(height: 9),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF1D6),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Text(
+              'مؤقت • يُحذف عند إغلاق LocalShare',
+              style: TextStyle(color: Color(0xFF8A5A00), fontSize: 11, fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => _openFile(context),
+                icon: const Icon(Icons.visibility_outlined, size: 17),
+                label: const Text('عرض مؤقت'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => _savePermanent(context),
+                icon: const Icon(Icons.download_done_rounded, size: 17),
+                label: const Text('حفظ دائم'),
+              ),
+            ],
+          ),
+        ] else if (androidPermanent) ...[
+          const SizedBox(height: 9),
+          const Text(
+            'تم الحفظ تلقائيًا في Downloads/LocalShare',
+            style: TextStyle(color: Color(0xFF128A50), fontSize: 11, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          TextButton.icon(
+            onPressed: () => _openFile(context),
+            icon: const Icon(Icons.open_in_new_rounded, size: 17),
+            label: const Text('فتح الملف'),
+          ),
+        ] else if (message.savedPermanently && message.isIncoming) ...[
+          const SizedBox(height: 8),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.check_circle_rounded, size: 16, color: Color(0xFF128A50)),
+              const SizedBox(width: 5),
+              const Text(
+                'محفوظ بشكل دائم',
+                style: TextStyle(color: Color(0xFF128A50), fontSize: 11, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(width: 8),
+              TextButton(onPressed: () => _openFile(context), child: const Text('فتح')),
+            ],
+          ),
+        ],
+        const SizedBox(height: 5),
+        Text(
+          _formatTime(message.sentAt),
+          style: TextStyle(color: foreground.withValues(alpha: 0.68), fontSize: 10),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openFile(BuildContext context) async {
+    try {
+      await service.openFile(message);
+    } catch (e) {
+      if (context.mounted) _showError(context, e);
+    }
+  }
+
+  Future<void> _savePermanent(BuildContext context) async {
+    try {
+      final saved = await service.savePermanently(message);
+      if (saved.isNotEmpty && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تم الحفظ بشكل دائم: $saved')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) _showError(context, e);
+    }
+  }
+}
+
+class _NoChatSelected extends StatelessWidget {
+  const _NoChatSelected();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.chat_bubble_outline_rounded, size: 70, color: Color(0xFF9AA4B2)),
+            SizedBox(height: 14),
+            Text('اختر جهازًا لفتح المحادثة', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            SizedBox(height: 7),
+            Text(
+              'أرسل نصوصًا وروابط وملفات مباشرة عبر الشبكة المحلية.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Color(0xFF667085)),
+            ),
           ],
         ),
       ),
@@ -674,72 +923,59 @@ class _SettingsTile extends StatelessWidget {
   }
 }
 
-class _PrivacyNote extends StatelessWidget {
-  const _PrivacyNote();
+class _EmptyChat extends StatelessWidget {
+  const _EmptyChat();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: const Color(0xFFEAF8EF), borderRadius: BorderRadius.circular(16)),
-      child: const Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.verified_user_outlined, color: Color(0xFF208A4B)),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'لا يستخدم LocalShare أي خادم سحابي. أسماء الأجهزة ورموز الثقة تحفظ محليًا، والملفات تنتقل مباشرة عبر شبكة Wi‑Fi المحلية.',
-              style: TextStyle(color: Color(0xFF206E42), height: 1.5),
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.lock_person_outlined, size: 58, color: Color(0xFF8A94A6)),
+            SizedBox(height: 12),
+            Text('ابدأ المحادثة الآمنة', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+            SizedBox(height: 6),
+            Text(
+              'اكتب رسالة أو رابطًا، أو استخدم زر المشبك لإرسال الملفات.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Color(0xFF667085)),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _PageTitle extends StatelessWidget {
-  const _PageTitle({required this.title, required this.subtitle});
-  final String title;
-  final String subtitle;
+class _InfoBox extends StatelessWidget {
+  const _InfoBox({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 4),
-        Text(subtitle, style: const TextStyle(color: Color(0xFF747B8E))),
-      ],
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, required this.subtitle, this.trailing});
-  final String title;
-  final String subtitle;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 3),
-              Text(subtitle, style: const TextStyle(color: Color(0xFF747B8E), fontSize: 12)),
-            ],
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F5FF),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: const Color(0xFF1769E0)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF344054), height: 1.4),
+            ),
           ),
-        ),
-        if (trailing != null) trailing!,
-      ],
+        ],
+      ),
     );
   }
 }
@@ -750,78 +986,13 @@ class _AppMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 44,
-      height: 44,
+      width: 38,
+      height: 38,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF3569F2), Color(0xFF6B8DFC)]),
-        borderRadius: BorderRadius.circular(14),
+        gradient: const LinearGradient(colors: [Color(0xFF0D5BD7), Color(0xFF17B4D9)]),
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: const Icon(Icons.swap_horiz_rounded, color: Colors.white, size: 29),
-    );
-  }
-}
-
-class _EmptyDevices extends StatelessWidget {
-  const _EmptyDevices();
-
-  @override
-  Widget build(BuildContext context) {
-    return const _EmptyBox(
-      icon: Icons.radar_rounded,
-      title: 'نبحث عن أجهزتك…',
-      subtitle: 'افتح LocalShare على الجوال والكمبيوتر وتأكد أنهما على نفس شبكة Wi‑Fi.',
-    );
-  }
-}
-
-class _EmptyTransfers extends StatelessWidget {
-  const _EmptyTransfers();
-
-  @override
-  Widget build(BuildContext context) {
-    return const _EmptyBox(
-      icon: Icons.swap_vert_rounded,
-      title: 'لا توجد عمليات نقل بعد',
-      subtitle: 'بعد ربط جهاز قريب اضغط «إرسال ملف» واختر أي ملف من جهازك.',
-    );
-  }
-}
-
-class _EmptyReceived extends StatelessWidget {
-  const _EmptyReceived();
-
-  @override
-  Widget build(BuildContext context) {
-    return const _EmptyBox(
-      icon: Icons.inbox_outlined,
-      title: 'لم تستلم ملفات بعد',
-      subtitle: 'ستظهر الملفات هنا فور وصولها من جهاز مرتبط.',
-    );
-  }
-}
-
-class _EmptyBox extends StatelessWidget {
-  const _EmptyBox({required this.icon, required this.title, required this.subtitle});
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE7EAF1))),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 34, color: const Color(0xFF8690A4)),
-          const SizedBox(height: 10),
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 5),
-          Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF747B8E), height: 1.4)),
-        ],
-      ),
+      child: const Icon(Icons.swap_horiz_rounded, color: Colors.white),
     );
   }
 }
@@ -833,14 +1004,18 @@ class _ErrorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFFFD8D8))),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFFD3D0)),
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline_rounded, color: Colors.red, size: 42),
-          const SizedBox(height: 12),
-          const Text('تعذر تشغيل خدمة المشاركة', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+          const Icon(Icons.error_outline_rounded, color: Color(0xFFC62828), size: 42),
+          const SizedBox(height: 10),
+          const Text('تعذر تشغيل LocalShare', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
           const SizedBox(height: 8),
           SelectableText(message, textAlign: TextAlign.center),
         ],
@@ -849,128 +1024,167 @@ class _ErrorCard extends StatelessWidget {
   }
 }
 
-Future<void> _sendFiles(BuildContext context, LocalShareService service, Peer peer) async {
-  try {
-    await service.pickAndSend(peer);
-  } catch (e) {
-    if (context.mounted) _toast(context, 'فشل الإرسال: $e', error: true);
-  }
-}
-
-Future<void> _pair(BuildContext context, LocalShareService service, DiscoveredDevice device) async {
+Future<void> _showPairDialog(
+  BuildContext context,
+  LocalShareService service,
+  DiscoveredDevice device,
+  ValueChanged<Peer> onPaired,
+) async {
   final controller = TextEditingController();
-  final code = await showDialog<String>(
+  var busy = false;
+  await showDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: Text('ربط مع ${device.name}'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('أدخل رمز الربط المكوّن من 6 أرقام الظاهر على الجهاز الآخر.'),
-          const SizedBox(height: 14),
-          Directionality(
-            textDirection: TextDirection.ltr,
-            child: TextField(
-              controller: controller,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              maxLength: 6,
-              textAlign: TextAlign.center,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: 4),
-              onSubmitted: (value) {
-                if (value.length == 6) Navigator.pop(context, value);
-              },
-            ),
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: Text('ربط مع ${device.name}'),
+        content: SizedBox(
+          width: 360,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('أدخل رمز الربط المكوّن من 6 أرقام الظاهر على الجهاز الآخر.'),
+              const SizedBox(height: 14),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                textDirection: TextDirection.ltr,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(labelText: 'رمز الربط', counterText: ''),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: busy ? null : () => Navigator.pop(context), child: const Text('إلغاء')),
+          FilledButton(
+            onPressed: busy
+                ? null
+                : () async {
+                    setState(() => busy = true);
+                    try {
+                      final peer = await service.pairDevice(device, controller.text);
+                      if (context.mounted) Navigator.pop(context);
+                      onPaired(peer);
+                    } catch (e) {
+                      if (context.mounted) _showError(context, e);
+                      setState(() => busy = false);
+                    }
+                  },
+            child: busy
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('ربط'),
           ),
         ],
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
-        FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('ربط')),
-      ],
     ),
   );
   controller.dispose();
-  if (code == null || code.length != 6) return;
-  try {
-    await service.pairDevice(device, code);
-    if (context.mounted) _toast(context, 'تم ربط الجهازين بنجاح');
-  } catch (e) {
-    if (context.mounted) _toast(context, '$e', error: true);
-  }
 }
 
 Future<void> _showManualIpDialog(BuildContext context, LocalShareService service) async {
   final controller = TextEditingController();
-  final ip = await showDialog<String>(
+  await showDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('ربط يدوي'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('اكتب عنوان IP الظاهر داخل LocalShare على الجهاز الآخر.'),
-          const SizedBox(height: 12),
-          Directionality(
-            textDirection: TextDirection.ltr,
-            child: TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: const InputDecoration(hintText: '192.168.1.20'),
-              onSubmitted: (value) => Navigator.pop(context, value),
-            ),
+      title: const Text('البحث بعنوان IP'),
+      content: SizedBox(
+        width: 380,
+        child: TextField(
+          controller: controller,
+          autofocus: true,
+          textDirection: TextDirection.ltr,
+          decoration: const InputDecoration(
+            labelText: 'عنوان IP المحلي',
+            hintText: '192.168.1.20',
           ),
-        ],
+        ),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
-        FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('بحث')),
+        FilledButton(
+          onPressed: () async {
+            try {
+              await service.probeIp(controller.text);
+              if (context.mounted) Navigator.pop(context);
+            } catch (e) {
+              if (context.mounted) _showError(context, e);
+            }
+          },
+          child: const Text('بحث'),
+        ),
       ],
     ),
   );
   controller.dispose();
-  if (ip == null || ip.trim().isEmpty) return;
-  try {
-    await service.probeIp(ip);
-    if (context.mounted) _toast(context, 'تم العثور على الجهاز');
-  } catch (e) {
-    if (context.mounted) _toast(context, 'لم يتم العثور على LocalShare في هذا العنوان', error: true);
-  }
 }
 
-Future<void> _renameDevice(BuildContext context, LocalShareService service) async {
+Future<void> _showDeviceNameDialog(BuildContext context, LocalShareService service) async {
   final controller = TextEditingController(text: service.deviceName);
-  final result = await showDialog<String>(
+  await showDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('اسم الجهاز'),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        maxLength: 32,
-        onSubmitted: (value) => Navigator.pop(context, value),
+      title: const Text('اسم هذا الجهاز'),
+      content: SizedBox(
+        width: 380,
+        child: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 32,
+          decoration: const InputDecoration(labelText: 'اسم الجهاز'),
+        ),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
-        FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('حفظ')),
+        FilledButton(
+          onPressed: () async {
+            await service.setDeviceName(controller.text);
+            if (context.mounted) Navigator.pop(context);
+          },
+          child: const Text('حفظ'),
+        ),
       ],
     ),
   );
   controller.dispose();
-  if (result != null) await service.setDeviceName(result);
 }
 
-void _toast(BuildContext context, String message, {bool error = false}) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: error ? Colors.red.shade700 : null,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+Future<void> _confirmForget(
+  BuildContext context,
+  LocalShareService service,
+  Peer peer,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('إلغاء ربط الجهاز؟'),
+      content: Text('سيحتاج ${peer.name} إلى رمز ربط جديد للاتصال مرة أخرى.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+        FilledButton.tonal(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('إلغاء الربط'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed == true) await service.forgetPeer(peer.deviceId);
+}
+
+void _showError(BuildContext context, Object error) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(error.toString().replaceFirst('Exception: ', '')),
+      behavior: SnackBarBehavior.floating,
+    ),
+  );
+}
+
+String _formatTime(DateTime time) {
+  final local = time.toLocal();
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
 }
