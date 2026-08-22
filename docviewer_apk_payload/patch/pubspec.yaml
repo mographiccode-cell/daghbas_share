@@ -1,7 +1,7 @@
 name: universal_doc_viewer
 description: Production-oriented local document manager and viewer for Android.
 publish_to: 'none'
-version: 2.5.0+7
+version: 2.6.0+8
 
 environment:
   sdk: '>=3.12.0 <4.0.0'
@@ -12,12 +12,15 @@ dependencies:
   cupertino_icons: ^1.0.8
   doc_viewer: 0.0.3
   docx_file_viewer: ^1.0.3
+  excel_plus: 2.14.2
   file_picker: ^12.0.0
   path: ^1.9.1
   path_provider: ^2.1.5
   permission_handler: ^13.0.1
   pdfrx: ^2.4.7
+  shared_preferences: ^2.5.5
   sqflite: ^2.4.3
+  two_dimensional_scrollables: ^0.5.3
 
 dev_dependencies:
   flutter_test:
