@@ -1,1 +1,1 @@
-trigger Mustanadati v2.5.0 redesign word toolbar safe adaptive icon 2026-08-21
+trigger Mustanadati v2.6.0 resume PDF DOCX and crash-safe Excel 2026-08-22
