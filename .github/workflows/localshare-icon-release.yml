@@ -36,19 +36,16 @@ jobs:
           cp flutter_local_share/pubspec.yaml generated/pubspec.yaml
           cp flutter_local_share/overrides/AndroidManifest.xml generated/android/app/src/main/AndroidManifest.xml
           cp flutter_local_share/overrides/MainActivity.kt generated/android/app/src/main/kotlin/com/mographiccode/local_share/MainActivity.kt
-      - name: Apply LocalShare icon to Android
+      - name: Generate and apply LocalShare icon to Android
         shell: bash
         run: |
           python -m pip install --quiet pillow
+          python flutter_local_share/tools/generate_localshare_icon.py localshare_icon.png
           python - <<'PY'
           from PIL import Image
           from pathlib import Path
-          icon='flutter_local_share/assets/localshare_icon.jpg'
-          probe=Image.open(icon)
-          probe.verify()
-          src=Image.open(icon).convert('RGBA')
-          assert src.width == src.height and src.width >= 128
-          print('ICON_OK', src.size)
+          src=Image.open('localshare_icon.png').convert('RGBA')
+          assert src.size == (512,512)
           for folder,size in {'mipmap-mdpi':48,'mipmap-hdpi':72,'mipmap-xhdpi':96,'mipmap-xxhdpi':144,'mipmap-xxxhdpi':192}.items():
               out=Path('generated/android/app/src/main/res')/folder/'ic_launcher.png'
               out.parent.mkdir(parents=True,exist_ok=True)
@@ -131,22 +128,20 @@ jobs:
           Copy-Item flutter_local_share/lib generated/lib -Recurse
           Copy-Item flutter_local_share/test generated/test -Recurse
           Copy-Item flutter_local_share/pubspec.yaml generated/pubspec.yaml -Force
-      - name: Apply LocalShare icon to Windows
+      - name: Generate and apply LocalShare icon to Windows
         shell: pwsh
         run: |
           python -m pip install --quiet pillow
+          python flutter_local_share/tools/generate_localshare_icon.py localshare_icon.png
           @'
           from PIL import Image
           from pathlib import Path
-          icon='flutter_local_share/assets/localshare_icon.jpg'
-          probe=Image.open(icon)
-          probe.verify()
-          src=Image.open(icon).convert('RGBA')
-          assert src.width == src.height and src.width >= 128
+          src=Image.open('localshare_icon.png').convert('RGBA')
+          assert src.size == (512,512)
           out=Path('generated/windows/runner/resources/app_icon.ico')
           out.parent.mkdir(parents=True,exist_ok=True)
           src.save(out,sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
-          print('ICON_OK',src.size,out.stat().st_size)
+          print('WINDOWS_ICON_OK',out.stat().st_size)
           '@ | Set-Content icon_build.py -Encoding UTF8
           python icon_build.py
           if (-not (Test-Path 'generated/windows/runner/resources/app_icon.ico')) { throw 'Windows icon missing' }
