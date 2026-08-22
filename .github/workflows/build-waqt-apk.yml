@@ -33,7 +33,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Verify, analyze, test, and build v1.1
+      - name: Verify, analyze, test, and build v1.1 final
         shell: bash
         run: |
           rm -rf ci-output app source waqt_source.b64 waqt_ci_source.zip v11_patch.b64 v11_patch.zip
@@ -104,6 +104,9 @@ jobs:
             cp source/waqt_alarm/android/app/src/main/res/values-night/styles.xml app/android/app/src/main/res/values-night/styles.xml
             cp source/waqt_alarm/android/app/src/main/res/values/colors.xml app/android/app/src/main/res/values/colors.xml
 
+            echo '=== INSTALL WAQT APP ICON ==='
+            bash ci/add_waqt_icon.sh
+
             echo '=== GENERATE ALARM SOUNDS ==='
             python3 - <<'PY'
           import math, struct, wave
@@ -138,7 +141,17 @@ jobs:
             flutter build apk --release
             cd ..
 
-            cp app/build/app/outputs/flutter-apk/app-release.apk ci-output/WAQT-Advanced-Alarm-v1.1.apk
+            APK='app/build/app/outputs/flutter-apk/app-release.apk'
+            echo '=== APK SIGNATURE VERIFY ==='
+            BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+            "$BUILD_TOOLS/apksigner" verify --verbose "$APK"
+            if [ -x "$BUILD_TOOLS/aapt" ]; then
+              "$BUILD_TOOLS/aapt" dump badging "$APK" | tee ci-output/apk_badging.txt
+            elif [ -x "$BUILD_TOOLS/aapt2" ]; then
+              "$BUILD_TOOLS/aapt2" dump badging "$APK" | tee ci-output/apk_badging.txt
+            fi
+
+            cp "$APK" ci-output/WAQT-Advanced-Alarm-v1.1.apk
             sha256sum ci-output/WAQT-Advanced-Alarm-v1.1.apk | tee ci-output/WAQT-Advanced-Alarm-v1.1.apk.sha256
             echo SUCCESS > ci-output/status.txt
           ) 2>&1 | tee ci-output/build.log
@@ -158,19 +171,20 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -f ci-output
-          git commit -m 'ci: WAQT v1.1 build result [skip ci]' || exit 0
+          git commit -m 'ci: WAQT v1.1 final build result [skip ci]' || exit 0
           git push origin HEAD:waqt-apk-build
 
       - name: Upload verified APK artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: WAQT-Advanced-Alarm-v1.1
+          name: WAQT-Advanced-Alarm-v1.1-final
           path: |
             ci-output/WAQT-Advanced-Alarm-v1.1.apk
             ci-output/WAQT-Advanced-Alarm-v1.1.apk.sha256
             ci-output/build.log
             ci-output/status.txt
+            ci-output/apk_badging.txt
           if-no-files-found: warn
           compression-level: 0
           retention-days: 30
