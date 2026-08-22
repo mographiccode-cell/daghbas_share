@@ -1,4 +1,4 @@
 android=failure
-windows=failure
-source_sha=5f86203b7afb4d0518105d18d09f7ba721628ce3
-run_id=32579590810
+windows=success
+source_sha=3cc080ae9354243cf847aacadaafee237c03812a
+run_id=32579558142
