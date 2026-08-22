@@ -1,1 +1,1 @@
-trigger Mustanadati v2.6.0 resume PDF DOCX safe Excel compatible parser retry 2026-08-22
+trigger Mustanadati v2.6.0 internal XLSX parser and resume reading final retry 2026-08-22
