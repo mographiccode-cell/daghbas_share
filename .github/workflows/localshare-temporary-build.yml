@@ -1,6 +1,8 @@
 name: Temporary LocalShare Build
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
     paths:
