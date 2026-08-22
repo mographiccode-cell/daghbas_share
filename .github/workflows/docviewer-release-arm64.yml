@@ -31,15 +31,17 @@ jobs:
           cp docviewer_apk_payload/patch/main.dart docviewer_build/lib/main.dart
           cp docviewer_apk_payload/patch/reading_progress_service.dart docviewer_build/lib/services/reading_progress_service.dart
           sed -i '/allowMultiple: true,/d' docviewer_build/lib/services/file_service.dart
+          sed -i 's#package:excel_plus/excel_plus.dart#package:excel/excel.dart#' docviewer_build/lib/screens/viewer_screen.dart
+          sed -i 's/return Excel.decodeBytesAsync(bytes);/return Excel.decodeBytes(bytes);/' docviewer_build/lib/screens/viewer_screen.dart
           rm -f docviewer_build/lib/services/document_viewer_service.dart
           ! grep -R "openDocument(" -n docviewer_build/lib
           grep -q 'DocViewerView' docviewer_build/lib/screens/viewer_screen.dart
           grep -q 'DocxView(' docviewer_build/lib/screens/viewer_screen.dart
           grep -q 'ReadingProgressService' docviewer_build/lib/screens/viewer_screen.dart
-          grep -q 'Excel.decodeBytesAsync' docviewer_build/lib/screens/viewer_screen.dart
+          grep -q 'Excel.decodeBytes' docviewer_build/lib/screens/viewer_screen.dart
           grep -q 'TableView(' docviewer_build/lib/screens/viewer_screen.dart
           grep -q 'version: 2.6.0+8' docviewer_build/pubspec.yaml
-          grep -q 'excel_plus: 2.14.2' docviewer_build/pubspec.yaml
+          grep -q 'excel: 4.0.6' docviewer_build/pubspec.yaml
           grep -q 'shared_preferences:' docviewer_build/pubspec.yaml
 
       - name: Bootstrap Android project
