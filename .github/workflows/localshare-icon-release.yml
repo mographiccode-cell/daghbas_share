@@ -40,14 +40,17 @@ jobs:
           cp flutter_local_share/overrides/AndroidManifest.xml generated/android/app/src/main/AndroidManifest.xml
           cp flutter_local_share/overrides/MainActivity.kt generated/android/app/src/main/kotlin/com/mographiccode/local_share/MainActivity.kt
 
-      - name: Apply LocalShare icon to Android
+      - name: Apply verified LocalShare icon to Android
         shell: bash
         run: |
+          cat flutter_local_share/assets/localshare_icon.b64.1 flutter_local_share/assets/localshare_icon.b64.2 flutter_local_share/assets/localshare_icon.b64.3 | base64 -d > localshare_icon.jpg
+          echo 'b0caf311088e2993bec655009631f9f4987fc5dbedf6cfbd61fd28c1d406fbaf  localshare_icon.jpg' | sha256sum -c -
           python -m pip install --quiet pillow
           python - <<'PY'
           from PIL import Image
           from pathlib import Path
-          src = Image.open('flutter_local_share/assets/localshare_icon.jpg').convert('RGBA')
+          src = Image.open('localshare_icon.jpg').convert('RGBA')
+          assert src.size == (256, 256)
           sizes = {
               'mipmap-mdpi': 48,
               'mipmap-hdpi': 72,
@@ -151,14 +154,19 @@ jobs:
           Copy-Item flutter_local_share/test generated/test -Recurse
           Copy-Item flutter_local_share/pubspec.yaml generated/pubspec.yaml -Force
 
-      - name: Apply LocalShare icon to Windows
+      - name: Apply verified LocalShare icon to Windows
         shell: pwsh
         run: |
+          $b64 = (Get-Content 'flutter_local_share/assets/localshare_icon.b64.1' -Raw) + (Get-Content 'flutter_local_share/assets/localshare_icon.b64.2' -Raw) + (Get-Content 'flutter_local_share/assets/localshare_icon.b64.3' -Raw)
+          [IO.File]::WriteAllBytes('localshare_icon.jpg', [Convert]::FromBase64String($b64))
+          $hash = (Get-FileHash 'localshare_icon.jpg' -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne 'b0caf311088e2993bec655009631f9f4987fc5dbedf6cfbd61fd28c1d406fbaf') { throw "Icon hash mismatch: $hash" }
           python -m pip install --quiet pillow
           @'
           from PIL import Image
           from pathlib import Path
-          src = Image.open('flutter_local_share/assets/localshare_icon.jpg').convert('RGBA')
+          src = Image.open('localshare_icon.jpg').convert('RGBA')
+          assert src.size == (256, 256)
           out = Path('generated/windows/runner/resources/app_icon.ico')
           out.parent.mkdir(parents=True, exist_ok=True)
           src.save(out, sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
@@ -184,7 +192,6 @@ jobs:
           $release = (Resolve-Path 'generated/build/windows/x64/runner/Release').Path
           $setupIcon = (Resolve-Path 'generated/windows/runner/resources/app_icon.ico').Path
           if (-not (Test-Path "$release/local_share.exe")) { throw 'Windows release executable missing' }
-
           $iss = @"
           [Setup]
           AppId={{8D2D488C-246B-4BDC-8C24-7B10A65B9649}
@@ -236,26 +243,19 @@ jobs:
           if ($install.ExitCode -ne 0) { throw "Installer exit code $($install.ExitCode)" }
           $exe = 'C:\Program Files\LocalShare\local_share.exe'
           if (-not (Test-Path $exe)) { throw 'Installed local_share.exe missing' }
-
-          $desktopCandidates = @(
-            "$env:PUBLIC\Desktop\LocalShare.lnk",
-            "$env:USERPROFILE\Desktop\LocalShare.lnk"
-          )
+          $desktopCandidates = @("$env:PUBLIC\Desktop\LocalShare.lnk", "$env:USERPROFILE\Desktop\LocalShare.lnk")
           $shortcut = $desktopCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $shortcut) { throw 'LocalShare desktop shortcut missing' }
-
           $ws = New-Object -ComObject WScript.Shell
           $lnk = $ws.CreateShortcut($shortcut)
           if ($lnk.TargetPath -ne $exe) { throw "Shortcut target incorrect: $($lnk.TargetPath)" }
-          if ($lnk.IconLocation -notmatch 'local_share.exe') { throw "Shortcut icon does not point to LocalShare app icon: $($lnk.IconLocation)" }
-
+          if ($lnk.IconLocation -notmatch 'local_share.exe') { throw "Shortcut icon incorrect: $($lnk.IconLocation)" }
           $proc = Start-Process -FilePath $exe -PassThru
           Start-Sleep -Seconds 8
           if ($proc.HasExited) { throw "LocalShare exited unexpectedly with code $($proc.ExitCode)" }
           if (-not (Get-NetFirewallRule -DisplayName 'LocalShare TCP' -ErrorAction SilentlyContinue)) { throw 'TCP firewall rule missing' }
           if (-not (Get-NetFirewallRule -DisplayName 'LocalShare UDP Discovery' -ErrorAction SilentlyContinue)) { throw 'UDP firewall rule missing' }
           Stop-Process -Id $proc.Id -Force
-
           $uninstaller = 'C:\Program Files\LocalShare\unins000.exe'
           if (-not (Test-Path $uninstaller)) { throw 'Uninstaller missing' }
           $uninstall = Start-Process -FilePath $uninstaller -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
