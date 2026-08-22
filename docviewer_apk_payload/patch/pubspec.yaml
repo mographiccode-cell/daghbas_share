@@ -23,6 +23,7 @@ dependencies:
   two_dimensional_scrollables: ^0.5.3
   xml: ^6.6.1
 
+# Build migration marker: excel: 4.0.6 was removed in favor of the internal XLSX parser.
 dev_dependencies:
   flutter_test:
     sdk: flutter
