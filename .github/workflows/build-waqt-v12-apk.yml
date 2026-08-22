@@ -44,7 +44,15 @@ jobs:
             java -version
 
             echo '=== SOURCE INTEGRITY ==='
-            cat ci/v12/waqt_source.b64.* > waqt_v12.b64
+            cat \
+              ci/v12/waqt_source.b64.00 ci/v12/waqt_source.b64.01 \
+              ci/v12/waqt_source.b64.02 ci/v12/waqt_source.b64.03 \
+              ci/v12/waqt_source.b64.04 ci/v12/waqt_source.b64.05a \
+              ci/v12/waqt_source.b64.05b ci/v12/waqt_source.b64.06 \
+              ci/v12/waqt_source.b64.07 ci/v12/waqt_source.b64.08 \
+              ci/v12/waqt_source.b64.09 ci/v12/waqt_source.b64.10 \
+              ci/v12/waqt_source.b64.11 > waqt_v12.b64
+            test "$(wc -c < waqt_v12.b64)" -eq 107496
             base64 --decode waqt_v12.b64 > waqt_v12.zip
             echo '625ac5c43a0ccaa697364ec5de04892dc426466037730a99f76985406e31d762  waqt_v12.zip' | sha256sum --check
             unzip -t waqt_v12.zip
@@ -102,7 +110,6 @@ jobs:
             cp source/waqt_alarm/android/app/src/main/res/values/colors.xml app/android/app/src/main/res/values/colors.xml
             cp source/waqt_alarm/android/app/src/main/res/values-night/styles.xml app/android/app/src/main/res/values-night/styles.xml
 
-            # Force the generated WAQT icon for every Android density.
             rm -rf app/android/app/src/main/res/mipmap-*
             for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p "app/android/app/src/main/res/mipmap-$density"
