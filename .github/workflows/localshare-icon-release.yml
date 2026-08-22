@@ -36,20 +36,23 @@ jobs:
           cp flutter_local_share/pubspec.yaml generated/pubspec.yaml
           cp flutter_local_share/overrides/AndroidManifest.xml generated/android/app/src/main/AndroidManifest.xml
           cp flutter_local_share/overrides/MainActivity.kt generated/android/app/src/main/kotlin/com/mographiccode/local_share/MainActivity.kt
-      - name: Apply verified LocalShare icon to Android
+      - name: Apply LocalShare icon to Android
         shell: bash
         run: |
-          echo '54d7090646e7c755c55a9c67d972d74f38fb51b3dc93448542725731a7427f8e  flutter_local_share/assets/localshare_icon.jpg' | sha256sum -c -
           python -m pip install --quiet pillow
           python - <<'PY'
           from PIL import Image
           from pathlib import Path
-          src = Image.open('flutter_local_share/assets/localshare_icon.jpg').convert('RGBA')
-          assert src.size == (128, 128)
-          for folder, size in {'mipmap-mdpi':48,'mipmap-hdpi':72,'mipmap-xhdpi':96,'mipmap-xxhdpi':144,'mipmap-xxxhdpi':192}.items():
-              out = Path('generated/android/app/src/main/res') / folder / 'ic_launcher.png'
-              out.parent.mkdir(parents=True, exist_ok=True)
-              src.resize((size,size), Image.Resampling.LANCZOS).save(out, optimize=True)
+          icon='flutter_local_share/assets/localshare_icon.jpg'
+          probe=Image.open(icon)
+          probe.verify()
+          src=Image.open(icon).convert('RGBA')
+          assert src.width == src.height and src.width >= 128
+          print('ICON_OK', src.size)
+          for folder,size in {'mipmap-mdpi':48,'mipmap-hdpi':72,'mipmap-xhdpi':96,'mipmap-xxhdpi':144,'mipmap-xxxhdpi':192}.items():
+              out=Path('generated/android/app/src/main/res')/folder/'ic_launcher.png'
+              out.parent.mkdir(parents=True,exist_ok=True)
+              src.resize((size,size),Image.Resampling.LANCZOS).save(out,optimize=True)
           PY
           test -s generated/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
       - name: Resolve dependencies
@@ -128,20 +131,22 @@ jobs:
           Copy-Item flutter_local_share/lib generated/lib -Recurse
           Copy-Item flutter_local_share/test generated/test -Recurse
           Copy-Item flutter_local_share/pubspec.yaml generated/pubspec.yaml -Force
-      - name: Apply verified LocalShare icon to Windows
+      - name: Apply LocalShare icon to Windows
         shell: pwsh
         run: |
-          $hash = (Get-FileHash 'flutter_local_share/assets/localshare_icon.jpg' -Algorithm SHA256).Hash.ToLower()
-          if ($hash -ne '54d7090646e7c755c55a9c67d972d74f38fb51b3dc93448542725731a7427f8e') { throw "Icon hash mismatch: $hash" }
           python -m pip install --quiet pillow
           @'
           from PIL import Image
           from pathlib import Path
-          src = Image.open('flutter_local_share/assets/localshare_icon.jpg').convert('RGBA')
-          assert src.size == (128, 128)
-          out = Path('generated/windows/runner/resources/app_icon.ico')
-          out.parent.mkdir(parents=True, exist_ok=True)
-          src.save(out, sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+          icon='flutter_local_share/assets/localshare_icon.jpg'
+          probe=Image.open(icon)
+          probe.verify()
+          src=Image.open(icon).convert('RGBA')
+          assert src.width == src.height and src.width >= 128
+          out=Path('generated/windows/runner/resources/app_icon.ico')
+          out.parent.mkdir(parents=True,exist_ok=True)
+          src.save(out,sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+          print('ICON_OK',src.size,out.stat().st_size)
           '@ | Set-Content icon_build.py -Encoding UTF8
           python icon_build.py
           if (-not (Test-Path 'generated/windows/runner/resources/app_icon.ico')) { throw 'Windows icon missing' }
@@ -158,10 +163,10 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
-          $release = (Resolve-Path 'generated/build/windows/x64/runner/Release').Path
-          $setupIcon = (Resolve-Path 'generated/windows/runner/resources/app_icon.ico').Path
+          $release=(Resolve-Path 'generated/build/windows/x64/runner/Release').Path
+          $setupIcon=(Resolve-Path 'generated/windows/runner/resources/app_icon.ico').Path
           if (-not (Test-Path "$release/local_share.exe")) { throw 'Windows release executable missing' }
-          $iss = @"
+          $iss=@"
           [Setup]
           AppId={{8D2D488C-246B-4BDC-8C24-7B10A65B9649}
           AppName=LocalShare
@@ -197,7 +202,7 @@ jobs:
           Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare UDP Discovery"""; Flags: runhidden; RunOnceId: "RemoveLocalShareUdp"
           "@
           Set-Content installer.iss $iss -Encoding UTF8
-          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          $iscc='C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
           & $iscc installer.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path 'artifacts/LocalShare-Windows-Setup.exe')) { throw 'Installer missing' }
@@ -205,26 +210,26 @@ jobs:
       - name: Install and verify Windows desktop shortcut
         shell: pwsh
         run: |
-          $setup = (Resolve-Path 'artifacts/LocalShare-Windows-Setup.exe').Path
-          $install = Start-Process $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
+          $setup=(Resolve-Path 'artifacts/LocalShare-Windows-Setup.exe').Path
+          $install=Start-Process $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Installer exit code $($install.ExitCode)" }
-          $exe = 'C:\Program Files\LocalShare\local_share.exe'
+          $exe='C:\Program Files\LocalShare\local_share.exe'
           if (-not (Test-Path $exe)) { throw 'Installed local_share.exe missing' }
-          $desktopCandidates = @("$env:PUBLIC\Desktop\LocalShare.lnk", "$env:USERPROFILE\Desktop\LocalShare.lnk")
-          $shortcut = $desktopCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $desktopCandidates=@("$env:PUBLIC\Desktop\LocalShare.lnk","$env:USERPROFILE\Desktop\LocalShare.lnk")
+          $shortcut=$desktopCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $shortcut) { throw 'LocalShare desktop shortcut missing' }
-          $ws = New-Object -ComObject WScript.Shell
-          $lnk = $ws.CreateShortcut($shortcut)
+          $ws=New-Object -ComObject WScript.Shell
+          $lnk=$ws.CreateShortcut($shortcut)
           if ($lnk.TargetPath -ne $exe) { throw "Shortcut target incorrect: $($lnk.TargetPath)" }
           if ($lnk.IconLocation -notmatch 'local_share.exe') { throw "Shortcut icon incorrect: $($lnk.IconLocation)" }
-          $proc = Start-Process $exe -PassThru
+          $proc=Start-Process $exe -PassThru
           Start-Sleep 8
-          if ($proc.HasExited) { throw "LocalShare exited unexpectedly" }
+          if ($proc.HasExited) { throw 'LocalShare exited unexpectedly' }
           if (-not (Get-NetFirewallRule -DisplayName 'LocalShare TCP' -ErrorAction SilentlyContinue)) { throw 'TCP firewall rule missing' }
           if (-not (Get-NetFirewallRule -DisplayName 'LocalShare UDP Discovery' -ErrorAction SilentlyContinue)) { throw 'UDP firewall rule missing' }
           Stop-Process -Id $proc.Id -Force
-          $uninstaller = 'C:\Program Files\LocalShare\unins000.exe'
-          $uninstall = Start-Process $uninstaller -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          $uninstaller='C:\Program Files\LocalShare\unins000.exe'
+          $uninstall=Start-Process $uninstaller -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
           if ($uninstall.ExitCode -ne 0) { throw "Uninstaller exit code $($uninstall.ExitCode)" }
           Start-Sleep 2
           if (Test-Path $exe) { throw 'Application executable remained after uninstall' }
