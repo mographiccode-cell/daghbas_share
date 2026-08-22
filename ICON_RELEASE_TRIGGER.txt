@@ -1,0 +1,1 @@
+LocalShare 1.1.1 final icon, desktop shortcut, installer and Android validation.
