@@ -1,1 +1,2 @@
 Trigger exact LocalShare installer and APK smoke validation.
+Android diagnostic retry 2.
