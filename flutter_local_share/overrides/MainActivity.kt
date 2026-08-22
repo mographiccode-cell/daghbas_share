@@ -30,18 +30,36 @@ class MainActivity : FlutterActivity() {
             }
 
             try {
-                val source = File(path)
+                val source = File(path).canonicalFile
+                val appRoot = getExternalFilesDir(null)?.canonicalFile
                 if (!source.exists() || !source.isFile) {
                     result.error("NOT_FOUND", "Source file does not exist", null)
                     return@setMethodCallHandler
                 }
-                val safeName = File(requestedName ?: source.name).name
+                if (appRoot != null && !source.path.startsWith(appRoot.path + File.separator)) {
+                    result.error("OUTSIDE_APP_STORAGE", "Source must be inside LocalShare storage", null)
+                    return@setMethodCallHandler
+                }
+                val safeName = sanitizeFileName(requestedName ?: source.name)
                 val saved = saveToDownloads(source, safeName)
                 result.success(saved)
             } catch (e: Exception) {
                 result.error("SAVE_FAILED", e.message ?: "Unable to save file", null)
             }
         }
+    }
+
+    private fun sanitizeFileName(value: String): String {
+        var name = File(value).name
+            .replace(Regex("[\\u0000-\\u001F\\u007F<>:\"|?*]"), "_")
+            .replace(Regex("[. ]+$"), "")
+            .take(180)
+        if (name.isBlank() || name == "." || name == "..") name = "received_file"
+        val stem = name.substringBeforeLast('.', name)
+        if (Regex("^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$", RegexOption.IGNORE_CASE).matches(stem)) {
+            name = "_$name"
+        }
+        return name
     }
 
     private fun saveToDownloads(source: File, fileName: String): String {
