@@ -8,7 +8,7 @@ jobs:
   build-release:
     if: github.head_ref == 'docviewer-apk-build-20260821'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -29,18 +29,56 @@ jobs:
           cp docviewer_apk_payload/patch/home_screen.dart docviewer_build/lib/screens/home_screen.dart
           cp docviewer_apk_payload/patch/document_tile.dart docviewer_build/lib/widgets/document_tile.dart
           cp docviewer_apk_payload/patch/main.dart docviewer_build/lib/main.dart
+          cp docviewer_apk_payload/patch/reading_progress_service.dart docviewer_build/lib/services/reading_progress_service.dart
           sed -i '/allowMultiple: true,/d' docviewer_build/lib/services/file_service.dart
           rm -f docviewer_build/lib/services/document_viewer_service.dart
           ! grep -R "openDocument(" -n docviewer_build/lib
           grep -q 'DocViewerView' docviewer_build/lib/screens/viewer_screen.dart
           grep -q 'DocxView(' docviewer_build/lib/screens/viewer_screen.dart
-          grep -q 'DocxSearchController' docviewer_build/lib/screens/viewer_screen.dart
-          grep -q 'docx_file_viewer' docviewer_build/pubspec.yaml
-          grep -q 'version: 2.5.0+7' docviewer_build/pubspec.yaml
+          grep -q 'ReadingProgressService' docviewer_build/lib/screens/viewer_screen.dart
+          grep -q 'Excel.decodeBytesAsync' docviewer_build/lib/screens/viewer_screen.dart
+          grep -q 'TableView(' docviewer_build/lib/screens/viewer_screen.dart
+          grep -q 'version: 2.6.0+8' docviewer_build/pubspec.yaml
+          grep -q 'excel_plus: 2.14.2' docviewer_build/pubspec.yaml
+          grep -q 'shared_preferences:' docviewer_build/pubspec.yaml
 
       - name: Bootstrap Android project
         working-directory: docviewer_build
         run: bash tool/bootstrap_android.sh
+
+      - name: Patch DOCX viewer for persistent scroll position
+        working-directory: docviewer_build
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+
+          cache = Path(os.environ['PUB_CACHE']) / 'hosted' / 'pub.dev'
+          matches = list(cache.glob('docx_file_viewer-1.0.3/lib/src/docx_view.dart'))
+          if len(matches) != 1:
+              raise SystemExit(f'Expected docx_file_viewer 1.0.3 source, found: {matches}')
+          p = matches[0]
+          s = p.read_text()
+          if 'final ScrollController? scrollController;' not in s:
+              needle = '  final DocxSearchController? searchController;\n'
+              if needle not in s:
+                  raise SystemExit('DOCX searchController patch point missing')
+              s = s.replace(needle, needle + '\n  /// Optional controller used to restore and persist reading position.\n  final ScrollController? scrollController;\n', 1)
+          if '    this.scrollController,\n' not in s:
+              needle = '    this.searchController,\n    this.onLoaded,\n'
+              if needle not in s:
+                  raise SystemExit('DOCX constructor patch point missing')
+              s = s.replace(needle, '    this.searchController,\n    this.scrollController,\n    this.onLoaded,\n', 1)
+          if 'controller: widget.scrollController,' not in s:
+              needle = '    final list = SingleChildScrollView(\n      padding: widget.config.padding,\n'
+              if needle not in s:
+                  raise SystemExit('DOCX scroll view patch point missing')
+              s = s.replace(needle, '    final list = SingleChildScrollView(\n      controller: widget.scrollController,\n      padding: widget.config.padding,\n', 1)
+          p.write_text(s)
+          assert 'final ScrollController? scrollController;' in s
+          assert 'this.scrollController,' in s
+          assert 'controller: widget.scrollController,' in s
+          PY
 
       - name: Apply safe adaptive launcher icon
         working-directory: docviewer_build
@@ -82,14 +120,14 @@ jobs:
           s = p.read_text()
           s = re.sub(r'(?m)^(\s*)compileSdk\s*=.*$', r'\1compileSdk = 37', s)
           s = re.sub(r'(?m)^(\s*)minSdk\s*=.*$', r'\1minSdk = 26', s)
-          s = re.sub(r'(?m)^(\s*)applicationId\s*=.*$', r'\1applicationId = "com.mographiccode.mustanadati.app"', s)
+          s = re.sub(r'(?m)^(\s*)applicationId\s*=.*$', r'\1applicationId = "com.mographiccode.mustanadati.resume"', s)
           marker = '        targetCompatibility = JavaVersion.VERSION_17\n'
           if 'isCoreLibraryDesugaringEnabled = true' not in s:
               s = s.replace(marker, marker + '        isCoreLibraryDesugaringEnabled = true\n')
           if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")' not in s:
               s += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")\n}\n'
           p.write_text(s)
-          assert 'applicationId = "com.mographiccode.mustanadati.app"' in s
+          assert 'applicationId = "com.mographiccode.mustanadati.resume"' in s
           assert re.search(r'(?m)^\s*minSdk\s*=\s*26\s*$', s)
           assert re.search(r'(?m)^\s*compileSdk\s*=\s*37\s*$', s)
 
@@ -132,15 +170,21 @@ jobs:
               expect(DocumentFilter.apply(docs, query: 'project').single.kind, DocumentKind.word);
               expect(DocumentFilter.apply(docs, favoritesOnly: true).single.name, 'report.pdf');
             });
-            test('kind filter isolates Excel', () {
-              expect(DocumentFilter.apply(docs, kind: DocumentKind.excel).single.extension, 'xlsx');
+            test('Excel formats map to safe Excel path', () {
+              expect(DocumentItem.kindForExtension('xlsx'), DocumentKind.excel);
+              expect(DocumentItem.kindForExtension('xls'), DocumentKind.excel);
             });
-            test('DOCX maps to Word', () {
+            test('PDF and DOCX remain supported', () {
+              expect(DocumentItem.kindForExtension('pdf'), DocumentKind.pdf);
               expect(DocumentItem.kindForExtension('docx'), DocumentKind.word);
             });
           }
           DART
           flutter test test/document_filter_test.dart
+          ! grep -A8 'item.kind == DocumentKind.excel' lib/screens/viewer_screen.dart | grep 'DocViewerView'
+          grep -q '_ExcelViewer(item: item)' lib/screens/viewer_screen.dart
+          grep -q 'savePdfPage' lib/screens/viewer_screen.dart
+          grep -q 'saveDocxOffset' lib/screens/viewer_screen.dart
 
       - name: Build optimized ARM64 release APK
         working-directory: docviewer_build
@@ -151,11 +195,11 @@ jobs:
         run: |
           set -euo pipefail
           INPUT=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-          ALIGNED=build/app/outputs/flutter-apk/mustanadati-v25-aligned.apk
-          FINAL=build/app/outputs/flutter-apk/Mustanadati-v2.5.0-Redesign-ARM64.apk
+          ALIGNED=build/app/outputs/flutter-apk/mustanadati-v26-aligned.apk
+          FINAL=build/app/outputs/flutter-apk/Mustanadati-v2.6.0-Resume-ExcelFix-ARM64.apk
           PASS="$(openssl rand -hex 24)"
           echo "::add-mask::$PASS"
-          KS=/tmp/mustanadati-v25-release.jks
+          KS=/tmp/mustanadati-v26-release.jks
           KEY_ALIAS=mustanadati
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
           ZIPALIGN="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name zipalign | sort -V | tail -1)"
@@ -168,8 +212,8 @@ jobs:
           grep -q 'Verified using v3 scheme (APK Signature Scheme v3): true' build/app/outputs/flutter-apk/signing-verification.txt
           "$ZIPALIGN" -c -P 16 -v 4 "$FINAL" >/dev/null
           "$AAPT" dump badging "$FINAL" | tee build/app/outputs/flutter-apk/badging.txt
-          grep -q "package: name='com.mographiccode.mustanadati.app'" build/app/outputs/flutter-apk/badging.txt
-          grep -q "versionName='2.5.0'" build/app/outputs/flutter-apk/badging.txt
+          grep -q "package: name='com.mographiccode.mustanadati.resume'" build/app/outputs/flutter-apk/badging.txt
+          grep -q "versionName='2.6.0'" build/app/outputs/flutter-apk/badging.txt
           grep -q "sdkVersion:'26'" build/app/outputs/flutter-apk/badging.txt
           grep -q "native-code: 'arm64-v8a'" build/app/outputs/flutter-apk/badging.txt
           ! grep -q 'android.permission.READ_MEDIA_IMAGES' build/app/outputs/flutter-apk/badging.txt
@@ -183,10 +227,10 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Mustanadati-v2.5.0-Redesign-Signed-ARM64
+          name: Mustanadati-v2.6.0-Resume-ExcelFix-Signed-ARM64
           path: |
-            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.5.0-Redesign-ARM64.apk
-            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.5.0-Redesign-ARM64.apk.sha256
+            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.6.0-Resume-ExcelFix-ARM64.apk
+            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.6.0-Resume-ExcelFix-ARM64.apk.sha256
             docviewer_build/build/app/outputs/flutter-apk/signing-verification.txt
             docviewer_build/build/app/outputs/flutter-apk/badging.txt
           if-no-files-found: error
