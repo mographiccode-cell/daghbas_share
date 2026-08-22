@@ -7,5 +7,198 @@ openjdk version "17.0.20" 2026-07-21
 OpenJDK Runtime Environment Temurin-17.0.20+8 (build 17.0.20+8)
 OpenJDK 64-Bit Server VM Temurin-17.0.20+8 (build 17.0.20+8, mixed mode, sharing)
 === SOURCE INTEGRITY ===
-waqt_v12.zip: FAILED
-sha256sum: WARNING: 1 computed checksum did NOT match
+waqt_v12.zip: OK
+Archive:  waqt_v12.zip
+    testing: waqt_alarm/              OK
+    testing: waqt_alarm/bootstrap_windows.ps1   OK
+    testing: waqt_alarm/pubspec.yaml   OK
+    testing: waqt_alarm/android/      OK
+    testing: waqt_alarm/android/settings.gradle.kts   OK
+    testing: waqt_alarm/android/gradle.properties   OK
+    testing: waqt_alarm/android/build.gradle.kts   OK
+    testing: waqt_alarm/android/app/   OK
+    testing: waqt_alarm/android/app/src/   OK
+    testing: waqt_alarm/android/app/src/main/   OK
+    testing: waqt_alarm/android/app/src/main/AndroidManifest.xml   OK
+    testing: waqt_alarm/android/app/src/main/kotlin/   OK
+    testing: waqt_alarm/android/app/src/main/kotlin/com/   OK
+    testing: waqt_alarm/android/app/src/main/kotlin/com/waqt/   OK
+    testing: waqt_alarm/android/app/src/main/kotlin/com/waqt/alarm/   OK
+    testing: waqt_alarm/android/app/src/main/kotlin/com/waqt/alarm/MainActivity.kt   OK
+    testing: waqt_alarm/android/app/src/main/res/   OK
+    testing: waqt_alarm/android/app/src/main/res/mipmap-xhdpi/   OK
+    testing: waqt_alarm/android/app/src/main/res/mipmap-xhdpi/ic_launcher.webp   OK
+    testing: waqt_alarm/android/app/src/main/res/raw/   OK
+    testing: waqt_alarm/android/app/src/main/res/raw/keep.xml   OK
+    testing: waqt_alarm/android/app/src/main/res/values/   OK
+    testing: waqt_alarm/android/app/src/main/res/values/styles.xml   OK
+    testing: waqt_alarm/android/app/src/main/res/values/colors.xml   OK
+    testing: waqt_alarm/android/app/src/main/res/mipmap-xxxhdpi/   OK
+    testing: waqt_alarm/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp   OK
+    testing: waqt_alarm/android/app/src/main/res/mipmap-hdpi/   OK
+    testing: waqt_alarm/android/app/src/main/res/mipmap-hdpi/ic_launcher.webp   OK
+    testing: waqt_alarm/android/app/src/main/res/mipmap-xxhdpi/   OK
+    testing: waqt_alarm/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.webp   OK
+    testing: waqt_alarm/android/app/src/main/res/drawable/   OK
+    testing: waqt_alarm/android/app/src/main/res/drawable/ic_stat_alarm.xml   OK
+    testing: waqt_alarm/android/app/src/main/res/mipmap-mdpi/   OK
+    testing: waqt_alarm/android/app/src/main/res/mipmap-mdpi/ic_launcher.webp   OK
+    testing: waqt_alarm/android/app/src/main/res/values-night/   OK
+    testing: waqt_alarm/android/app/src/main/res/values-night/styles.xml   OK
+    testing: waqt_alarm/android/app/build.gradle.kts   OK
+    testing: waqt_alarm/.gitignore    OK
+    testing: waqt_alarm/lib/          OK
+    testing: waqt_alarm/lib/app.dart   OK
+    testing: waqt_alarm/lib/models/   OK
+    testing: waqt_alarm/lib/models/medication.dart   OK
+    testing: waqt_alarm/lib/models/alarm.dart   OK
+    testing: waqt_alarm/lib/models/task_reminder.dart   OK
+    testing: waqt_alarm/lib/models/dose_log.dart   OK
+    testing: waqt_alarm/lib/services/   OK
+    testing: waqt_alarm/lib/services/schedule_calculator.dart   OK
+    testing: waqt_alarm/lib/services/notification_service.dart   OK
+    testing: waqt_alarm/lib/widgets/   OK
+    testing: waqt_alarm/lib/widgets/glass_card.dart   OK
+    testing: waqt_alarm/lib/widgets/section_title.dart   OK
+    testing: waqt_alarm/lib/widgets/weekday_selector.dart   OK
+    testing: waqt_alarm/lib/data/     OK
+    testing: waqt_alarm/lib/data/app_database.dart   OK
+    testing: waqt_alarm/lib/screens/   OK
+    testing: waqt_alarm/lib/screens/tasks/   OK
+    testing: waqt_alarm/lib/screens/tasks/tasks_screen.dart   OK
+    testing: waqt_alarm/lib/screens/tasks/task_editor_screen.dart   OK
+    testing: waqt_alarm/lib/screens/medications/   OK
+    testing: waqt_alarm/lib/screens/medications/medication_editor_screen.dart   OK
+    testing: waqt_alarm/lib/screens/medications/medications_screen.dart   OK
+    testing: waqt_alarm/lib/screens/shell_screen.dart   OK
+    testing: waqt_alarm/lib/screens/home/   OK
+    testing: waqt_alarm/lib/screens/home/home_screen.dart   OK
+    testing: waqt_alarm/lib/screens/alarm_ring_screen.dart   OK
+    testing: waqt_alarm/lib/screens/alarms/   OK
+    testing: waqt_alarm/lib/screens/alarms/alarms_screen.dart   OK
+    testing: waqt_alarm/lib/screens/alarms/alarm_editor_screen.dart   OK
+    testing: waqt_alarm/lib/core/     OK
+    testing: waqt_alarm/lib/core/utils/   OK
+    testing: waqt_alarm/lib/core/utils/time_utils.dart   OK
+    testing: waqt_alarm/lib/core/theme/   OK
+    testing: waqt_alarm/lib/core/theme/app_theme.dart   OK
+    testing: waqt_alarm/lib/core/theme/app_colors.dart   OK
+    testing: waqt_alarm/lib/state/    OK
+    testing: waqt_alarm/lib/state/app_state.dart   OK
+    testing: waqt_alarm/lib/main.dart   OK
+    testing: waqt_alarm/test/         OK
+    testing: waqt_alarm/test/schedule_calculator_test.dart   OK
+    testing: waqt_alarm/README.md     OK
+    testing: waqt_alarm/analysis_options.yaml   OK
+No errors detected in compressed data of waqt_v12.zip.
+=== UNPACK SOURCE ===
+=== GENERATE RINGTONES ===
+waqt_classic.wav 352844
+waqt_soft.wav 441044
+waqt_digital.wav 282284
+=== CREATE ANDROID SCAFFOLD ===
+Creating project ....
+Resolving dependencies...
+Downloading packages...
+Got dependencies.
+Wrote 35 files.
+
+All done!
+You can find general documentation for Flutter at: https://docs.flutter.dev/
+Detailed API documentation is available at: https://api.flutter.dev/
+If you prefer video documentation, consider: https://www.youtube.com/c/flutterdev
+
+In order to run your application, type:
+
+  $ flutter run
+
+Your application code is in ./lib/main.dart.
+
+=== OVERLAY WAQT v1.2 SOURCE ===
+=== VERIFY UX FEATURES IN SOURCE ===
+=== PUB GET ===
+Resolving dependencies...
+Downloading packages...
++ args 2.7.0
++ dbus 0.7.15
++ equatable 2.1.0
++ ffi 2.2.0
+< flutter_lints 5.0.0 (was 6.0.0) (6.0.0 available)
++ flutter_local_notifications 19.5.0 (22.3.0 available)
++ flutter_local_notifications_linux 6.0.0 (8.0.1 available)
++ flutter_local_notifications_platform_interface 9.1.0 (12.2.0 available)
++ flutter_local_notifications_windows 1.0.3 (3.1.1 available)
++ flutter_localizations 0.0.0 from sdk flutter
++ flutter_timezone 5.1.0
++ flutter_web_plugins 0.0.0 from sdk flutter
++ http 1.6.0
++ http_parser 4.1.2
++ intl 0.20.3
+< lints 5.1.1 (was 6.1.0) (6.1.0 available)
++ logging 1.3.0
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
++ nested 1.0.0
+  path 1.9.1 (from transitive dependency to direct dependency)
++ petitparser 7.0.2
++ platform 3.1.6
++ plugin_platform_interface 2.1.8
++ provider 6.1.5+1
++ sensors_plus 6.1.2 (7.1.0 available)
++ sensors_plus_platform_interface 2.0.2
++ sqflite 2.4.3
++ sqflite_android 2.4.3
++ sqflite_common 2.5.11
++ sqflite_darwin 2.4.3+1
++ sqflite_platform_interface 2.4.1
++ synchronized 3.4.1+2
+  test_api 0.7.12 (0.7.13 available)
++ timezone 0.10.1 (0.11.1 available)
++ typed_data 1.4.0
+  vector_math 2.4.0 (2.4.2 available)
++ web 1.1.1
++ xdg_directories 1.1.0
++ xml 6.6.1 (7.0.1 available)
+Changed 36 dependencies!
+13 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Upgrading analysis_options.yaml to exclude build and platform directories.
+=== ANALYZE ===
+Analyzing app...                                                
+No issues found! (ran in 9.5s)
+=== TEST ===
+
+::group::✅ Passing tests
+✅ one-time alarm does not reappear after its date
+✅ weekday alarm only schedules selected weekdays
+✅ medication supports every 2 days with multiple daily doses
+✅ task every 3 days stays anchored to start date
+::endgroup::
+
+🎉 4 tests passed.
+=== RELEASE BUILD ===
+Running Gradle task 'assembleRelease'...                        
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): flutter_timezone, sensors_plus
+Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
+
+Please check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.
+If no such version exists, report the issue to the plugin. If necessary, here is a guide on filing
+an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
+
+If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 10340 bytes (99.4% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Caught exception: Already watching path: /home/runner/work/daghbas_share/daghbas_share/app/android
+Running Gradle task 'assembleRelease'...                          238.3s
+✓ Built build/app/outputs/flutter-apk/app-release.apk (56.7MB)
+=== APK SIGNATURE VERIFY ===
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): false
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v3.2 scheme (APK Signature Scheme v3.2): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+80992624faaef792350cb7541be04768f6896e8e3e98ddcbc23a0cf3ac2a2617  ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk
+-rw-r--r-- 1 runner runner 55M Aug 22 09:35 ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk
