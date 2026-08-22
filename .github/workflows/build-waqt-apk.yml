@@ -62,11 +62,34 @@ jobs:
             flutter create --platforms=android --org com.waqt --project-name waqt_alarm .
             cd ..
 
-            echo '=== OVERLAY WAQT SOURCE ==='
+            echo '=== OVERLAY WAQT SOURCE + QA PATCHES ==='
             mkdir source
             unzip -q waqt_ci_source.zip -d source
+            python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('source/waqt_alarm/lib/core/utils/time_utils.dart')
+          s = p.read_text()
+          s = s.replace("if (days.length == 5 && days.containsAll(<int>[1, 2, 3, 4, 5])) return 'أيام العمل';", "if (days.length == 5 && <int>[1, 2, 3, 4, 5].every(days.contains)) return 'أيام العمل';")
+          p.write_text(s)
+
+          p = Path('source/waqt_alarm/lib/services/notification_service.dart')
+          p.write_text(p.read_text().replace("import 'dart:typed_data';\n", ''))
+
+          p = Path('source/waqt_alarm/lib/screens/alarm_ring_screen.dart')
+          s = p.read_text()
+          s = s.replace("  Future<void> _dismiss() async {\n    await NotificationService.instance.cancel(widget.notificationId);\n    final AlarmModel? alarm = _alarm;\n    if (alarm != null && alarm.daysOfWeek.isEmpty && alarm.enabled) {\n      await context.read<AppState>().toggleAlarm(alarm, false);\n    }\n    if (mounted) Navigator.of(context).pop();\n  }", "  Future<void> _dismiss() async {\n    final AppState state = context.read<AppState>();\n    final AlarmModel? alarm = state.alarmById(widget.alarmId);\n    await NotificationService.instance.cancel(widget.notificationId);\n    if (alarm != null && alarm.daysOfWeek.isEmpty && alarm.enabled) {\n      await state.toggleAlarm(alarm, false);\n    }\n    if (mounted) Navigator.of(context).pop();\n  }")
+          p.write_text(s)
+
+          p = Path('source/waqt_alarm/lib/app.dart')
+          s = p.read_text()
+          s = s.replace("      final MedicationModel? med = state.medicationById(id);\n      final BuildContext? navContext = appNavigatorKey.currentContext;\n      if (med != null && navContext != null) {\n        await Navigator.of(navContext).push(MaterialPageRoute<void>(\n          builder: (_) => MedicationEditorScreen(existing: med),\n        ));\n      }", "      final MedicationModel? med = state.medicationById(id);\n      final NavigatorState? navigator = appNavigatorKey.currentState;\n      if (med != null && navigator != null) {\n        await navigator.push(MaterialPageRoute<void>(\n          builder: (_) => MedicationEditorScreen(existing: med),\n        ));\n      }")
+          s = s.replace("      final task = state.taskById(id);\n      final BuildContext? navContext = appNavigatorKey.currentContext;\n      if (task != null && navContext != null) {\n        await Navigator.of(navContext).push(MaterialPageRoute<void>(\n          builder: (_) => TaskEditorScreen(existing: task),\n        ));\n      }", "      final task = state.taskById(id);\n      final NavigatorState? navigator = appNavigatorKey.currentState;\n      if (task != null && navigator != null) {\n        await navigator.push(MaterialPageRoute<void>(\n          builder: (_) => TaskEditorScreen(existing: task),\n        ));\n      }")
+          p.write_text(s)
+          PY
             cp -R source/waqt_alarm/lib app/
-            cp -R source/waqt_alarm/test app/
+            rm -rf app/test
+            cp -R source/waqt_alarm/test app/test
             cp source/waqt_alarm/pubspec.yaml app/pubspec.yaml
             cp source/waqt_alarm/analysis_options.yaml app/analysis_options.yaml
             cp source/waqt_alarm/android/app/build.gradle.kts app/android/app/build.gradle.kts
