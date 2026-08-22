@@ -6,60 +6,11 @@ Tools • Dart 3.13.0 • DevTools 2.60.0
 openjdk version "17.0.20" 2026-07-21
 OpenJDK Runtime Environment Temurin-17.0.20+8 (build 17.0.20+8)
 OpenJDK 64-Bit Server VM Temurin-17.0.20+8 (build 17.0.20+8, mixed mode, sharing)
-=== SOURCE INTEGRITY ===
+=== BASE SOURCE INTEGRITY ===
 waqt_ci_source.zip: OK
-Archive:  waqt_ci_source.zip
-    testing: waqt_alarm/lib/          OK
-    testing: waqt_alarm/lib/app.dart   OK
-    testing: waqt_alarm/lib/models/   OK
-    testing: waqt_alarm/lib/models/medication.dart   OK
-    testing: waqt_alarm/lib/models/alarm.dart   OK
-    testing: waqt_alarm/lib/models/task_reminder.dart   OK
-    testing: waqt_alarm/lib/models/dose_log.dart   OK
-    testing: waqt_alarm/lib/services/   OK
-    testing: waqt_alarm/lib/services/schedule_calculator.dart   OK
-    testing: waqt_alarm/lib/services/notification_service.dart   OK
-    testing: waqt_alarm/lib/widgets/   OK
-    testing: waqt_alarm/lib/widgets/glass_card.dart   OK
-    testing: waqt_alarm/lib/widgets/section_title.dart   OK
-    testing: waqt_alarm/lib/widgets/weekday_selector.dart   OK
-    testing: waqt_alarm/lib/data/     OK
-    testing: waqt_alarm/lib/data/app_database.dart   OK
-    testing: waqt_alarm/lib/screens/   OK
-    testing: waqt_alarm/lib/screens/tasks/   OK
-    testing: waqt_alarm/lib/screens/tasks/tasks_screen.dart   OK
-    testing: waqt_alarm/lib/screens/tasks/task_editor_screen.dart   OK
-    testing: waqt_alarm/lib/screens/medications/   OK
-    testing: waqt_alarm/lib/screens/medications/medication_editor_screen.dart   OK
-    testing: waqt_alarm/lib/screens/medications/medications_screen.dart   OK
-    testing: waqt_alarm/lib/screens/shell_screen.dart   OK
-    testing: waqt_alarm/lib/screens/home/   OK
-    testing: waqt_alarm/lib/screens/home/home_screen.dart   OK
-    testing: waqt_alarm/lib/screens/alarm_ring_screen.dart   OK
-    testing: waqt_alarm/lib/screens/alarms/   OK
-    testing: waqt_alarm/lib/screens/alarms/alarms_screen.dart   OK
-    testing: waqt_alarm/lib/screens/alarms/alarm_editor_screen.dart   OK
-    testing: waqt_alarm/lib/core/     OK
-    testing: waqt_alarm/lib/core/utils/   OK
-    testing: waqt_alarm/lib/core/utils/time_utils.dart   OK
-    testing: waqt_alarm/lib/core/theme/   OK
-    testing: waqt_alarm/lib/core/theme/app_theme.dart   OK
-    testing: waqt_alarm/lib/core/theme/app_colors.dart   OK
-    testing: waqt_alarm/lib/state/    OK
-    testing: waqt_alarm/lib/state/app_state.dart   OK
-    testing: waqt_alarm/lib/main.dart   OK
-    testing: waqt_alarm/test/         OK
-    testing: waqt_alarm/test/schedule_calculator_test.dart   OK
-    testing: waqt_alarm/pubspec.yaml   OK
-    testing: waqt_alarm/analysis_options.yaml   OK
-    testing: waqt_alarm/android/app/build.gradle.kts   OK
-    testing: waqt_alarm/android/app/src/main/AndroidManifest.xml   OK
-    testing: waqt_alarm/android/app/src/main/res/drawable/ic_stat_alarm.xml   OK
-    testing: waqt_alarm/android/app/src/main/res/raw/keep.xml   OK
-    testing: waqt_alarm/android/app/src/main/res/values/styles.xml   OK
-    testing: waqt_alarm/android/app/src/main/res/values-night/styles.xml   OK
-    testing: waqt_alarm/android/app/src/main/res/values/colors.xml   OK
-No errors detected in compressed data of waqt_ci_source.zip.
+=== APPLY V1.1 UX PATCH ===
+v11_patch.zip: OK
+=== APPLY QA COMPATIBILITY PATCHES ===
 === CREATE ANDROID SCAFFOLD ===
 Creating project ....
 Resolving dependencies...
@@ -78,7 +29,11 @@ In order to run your application, type:
 
 Your application code is in ./lib/main.dart.
 
-=== OVERLAY WAQT SOURCE + QA PATCHES ===
+=== OVERLAY WAQT SOURCE ===
+=== GENERATE ALARM SOUNDS ===
+app/android/app/src/main/res/raw/waqt_classic.wav: RIFF (little-endian) data, WAVE audio, Microsoft PCM, 16 bit, mono 44100 Hz
+app/android/app/src/main/res/raw/waqt_digital.wav: RIFF (little-endian) data, WAVE audio, Microsoft PCM, 16 bit, mono 44100 Hz
+app/android/app/src/main/res/raw/waqt_soft.wav:    RIFF (little-endian) data, WAVE audio, Microsoft PCM, 16 bit, mono 44100 Hz
 === PUB GET ===
 Resolving dependencies...
 Downloading packages...
@@ -128,7 +83,7 @@ Try `flutter pub outdated` for more information.
 Upgrading analysis_options.yaml to exclude build and platform directories.
 === ANALYZE ===
 Analyzing app...                                                
-No issues found! (ran in 9.3s)
+No issues found! (ran in 10.0s)
 === TEST ===
 
 ::group::✅ Passing tests
@@ -149,8 +104,8 @@ If no such version exists, report the issue to the plugin. If necessary, here is
 an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
 
 If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
-Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 9100 bytes (99.4% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 10340 bytes (99.4% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
 Caught exception: Already watching path: /home/runner/work/daghbas_share/daghbas_share/app/android
-Running Gradle task 'assembleRelease'...                          246.8s
-✓ Built build/app/outputs/flutter-apk/app-release.apk (56.3MB)
-5d9041b5af36cfce3d7d3060ca3815331b6fc09480ff66ca7d806eb991f50669  ci-output/WAQT-Advanced-Alarm-test.apk
+Running Gradle task 'assembleRelease'...                          256.3s
+✓ Built build/app/outputs/flutter-apk/app-release.apk (56.7MB)
+084296176523dc0522229852817a1710a3092052dc21fc3b2965788ded68c126  ci-output/WAQT-Advanced-Alarm-v1.1.apk
