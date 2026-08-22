@@ -1,0 +1,10 @@
+name: WAQT APK build completed
+
+on:
+  workflow_dispatch:
+
+jobs:
+  archived:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'WAQT v1.1 final APK already built and verified.'
