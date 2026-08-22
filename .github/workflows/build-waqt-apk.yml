@@ -4,17 +4,21 @@ on:
   push:
     branches:
       - waqt-apk-build
+    paths-ignore:
+      - 'ci-output/**'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: waqt-apk-build
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -29,64 +33,76 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Verify source archive
+      - name: Verify, analyze, test, and build
+        shell: bash
         run: |
-          cat ci/waqt_source.b64.* > waqt_source.b64
-          base64 --decode waqt_source.b64 > waqt_ci_source.zip
-          echo "9a3b68c899a9c6686a141a59a531b24ca4108f321dde6dd97ddd5bf07ff0c121  waqt_ci_source.zip" | sha256sum --check
-          unzip -t waqt_ci_source.zip
+          rm -rf ci-output app source waqt_source.b64 waqt_ci_source.zip
+          mkdir -p ci-output
+          set +e
+          (
+            set -e
+            echo '=== TOOLCHAIN ==='
+            flutter --version
+            java -version
 
-      - name: Create Android scaffold
+            echo '=== SOURCE INTEGRITY ==='
+            cat ci/waqt_source.b64.* > waqt_source.b64
+            base64 --decode waqt_source.b64 > waqt_ci_source.zip
+            echo '9a3b68c899a9c6686a141a59a531b24ca4108f321dde6dd97ddd5bf07ff0c121  waqt_ci_source.zip' | sha256sum --check
+            unzip -t waqt_ci_source.zip
+
+            echo '=== CREATE ANDROID SCAFFOLD ==='
+            mkdir app
+            cd app
+            flutter create --platforms=android --org com.waqt --project-name waqt_alarm .
+            cd ..
+
+            echo '=== OVERLAY WAQT SOURCE ==='
+            mkdir source
+            unzip -q waqt_ci_source.zip -d source
+            cp -R source/waqt_alarm/lib app/
+            cp -R source/waqt_alarm/test app/
+            cp source/waqt_alarm/pubspec.yaml app/pubspec.yaml
+            cp source/waqt_alarm/analysis_options.yaml app/analysis_options.yaml
+            cp source/waqt_alarm/android/app/build.gradle.kts app/android/app/build.gradle.kts
+            cp source/waqt_alarm/android/app/src/main/AndroidManifest.xml app/android/app/src/main/AndroidManifest.xml
+            mkdir -p app/android/app/src/main/res/drawable app/android/app/src/main/res/raw app/android/app/src/main/res/values app/android/app/src/main/res/values-night
+            cp source/waqt_alarm/android/app/src/main/res/drawable/ic_stat_alarm.xml app/android/app/src/main/res/drawable/
+            cp source/waqt_alarm/android/app/src/main/res/raw/keep.xml app/android/app/src/main/res/raw/
+            cp source/waqt_alarm/android/app/src/main/res/values/styles.xml app/android/app/src/main/res/values/styles.xml
+            cp source/waqt_alarm/android/app/src/main/res/values-night/styles.xml app/android/app/src/main/res/values-night/styles.xml
+            cp source/waqt_alarm/android/app/src/main/res/values/colors.xml app/android/app/src/main/res/values/colors.xml
+
+            cd app
+            echo '=== PUB GET ==='
+            flutter pub get
+            echo '=== ANALYZE ==='
+            flutter analyze --no-fatal-infos
+            echo '=== TEST ==='
+            flutter test
+            echo '=== RELEASE APK BUILD ==='
+            flutter build apk --release
+            cd ..
+
+            cp app/build/app/outputs/flutter-apk/app-release.apk ci-output/WAQT-Advanced-Alarm-test.apk
+            sha256sum ci-output/WAQT-Advanced-Alarm-test.apk | tee ci-output/WAQT-Advanced-Alarm-test.apk.sha256
+            echo SUCCESS > ci-output/status.txt
+          ) 2>&1 | tee ci-output/build.log
+          result=${PIPESTATUS[0]}
+          if [ "$result" -ne 0 ]; then
+            echo "FAILED:$result" > ci-output/status.txt
+          fi
+          echo "pipeline_exit=$result" >> ci-output/status.txt
+          exit 0
+
+      - name: Publish CI result to temporary branch
+        if: always()
+        shell: bash
         run: |
-          mkdir app
-          cd app
-          flutter create --platforms=android --org com.waqt --project-name waqt_alarm .
-
-      - name: Overlay WAQT source
-        run: |
-          rm -rf source
-          mkdir source
-          unzip -q waqt_ci_source.zip -d source
-          cp -R source/waqt_alarm/lib app/
-          cp -R source/waqt_alarm/test app/
-          cp source/waqt_alarm/pubspec.yaml app/pubspec.yaml
-          cp source/waqt_alarm/analysis_options.yaml app/analysis_options.yaml
-          cp source/waqt_alarm/android/app/build.gradle.kts app/android/app/build.gradle.kts
-          cp source/waqt_alarm/android/app/src/main/AndroidManifest.xml app/android/app/src/main/AndroidManifest.xml
-          mkdir -p app/android/app/src/main/res/drawable app/android/app/src/main/res/raw app/android/app/src/main/res/values app/android/app/src/main/res/values-night
-          cp source/waqt_alarm/android/app/src/main/res/drawable/ic_stat_alarm.xml app/android/app/src/main/res/drawable/
-          cp source/waqt_alarm/android/app/src/main/res/raw/keep.xml app/android/app/src/main/res/raw/
-          cp source/waqt_alarm/android/app/src/main/res/values/styles.xml app/android/app/src/main/res/values/styles.xml
-          cp source/waqt_alarm/android/app/src/main/res/values-night/styles.xml app/android/app/src/main/res/values-night/styles.xml
-          cp source/waqt_alarm/android/app/src/main/res/values/colors.xml app/android/app/src/main/res/values/colors.xml
-
-      - name: Resolve dependencies
-        working-directory: app
-        run: flutter pub get
-
-      - name: Analyze
-        working-directory: app
-        run: flutter analyze --no-fatal-infos
-
-      - name: Test
-        working-directory: app
-        run: flutter test
-
-      - name: Build test release APK
-        working-directory: app
-        run: flutter build apk --release
-
-      - name: Prepare artifact
-        run: |
-          cp app/build/app/outputs/flutter-apk/app-release.apk WAQT-Advanced-Alarm-test.apk
-          sha256sum WAQT-Advanced-Alarm-test.apk | tee WAQT-Advanced-Alarm-test.apk.sha256
-          ls -lh WAQT-Advanced-Alarm-test.apk
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: WAQT-Advanced-Alarm-APK
-          path: |
-            WAQT-Advanced-Alarm-test.apk
-            WAQT-Advanced-Alarm-test.apk.sha256
-          if-no-files-found: error
+          mkdir -p ci-output
+          if [ ! -f ci-output/status.txt ]; then echo 'FAILED:setup-or-runner' > ci-output/status.txt; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f ci-output
+          git commit -m 'ci: WAQT build result [skip ci]' || exit 0
+          git push origin HEAD:waqt-apk-build
