@@ -1,0 +1,174 @@
+name: Temporary LocalShare Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/localshare-temporary-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: flutter-local-share-v1
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android project
+        shell: bash
+        run: |
+          rm -rf generated
+          flutter create --org com.mographiccode --project-name local_share --platforms=android generated
+          rm -rf generated/lib generated/test
+          cp -R flutter_local_share/lib generated/lib
+          cp -R flutter_local_share/test generated/test
+          cp flutter_local_share/pubspec.yaml generated/pubspec.yaml
+          cp flutter_local_share/overrides/AndroidManifest.xml generated/android/app/src/main/AndroidManifest.xml
+          cp flutter_local_share/overrides/MainActivity.kt generated/android/app/src/main/kotlin/com/mographiccode/local_share/MainActivity.kt
+      - name: Check and build Android
+        working-directory: generated
+        run: |
+          flutter pub get
+          dart format lib test --output=none --set-exit-if-changed
+          flutter analyze
+          flutter test
+          flutter build apk --release
+      - name: Stage Android
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          cp generated/build/app/outputs/flutter-apk/app-release.apk artifacts/LocalShare-Android.apk
+          sha256sum artifacts/LocalShare-Android.apk > artifacts/LocalShare-Android.apk.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: localshare-android
+          path: artifacts/*
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: flutter-local-share-v1
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Windows project
+        shell: pwsh
+        run: |
+          if (Test-Path generated) { Remove-Item generated -Recurse -Force }
+          flutter config --enable-windows-desktop
+          flutter create --org com.mographiccode --project-name local_share --platforms=windows generated
+          Remove-Item generated/lib -Recurse -Force
+          Remove-Item generated/test -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item flutter_local_share/lib generated/lib -Recurse
+          Copy-Item flutter_local_share/test generated/test -Recurse
+          Copy-Item flutter_local_share/pubspec.yaml generated/pubspec.yaml -Force
+      - name: Check and build Windows
+        working-directory: generated
+        shell: pwsh
+        run: |
+          flutter pub get
+          dart format lib test --output=none --set-exit-if-changed
+          flutter analyze
+          flutter test
+          flutter build windows --release
+      - name: Package Windows
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          $release = (Resolve-Path 'generated/build/windows/x64/runner/Release').Path
+          Compress-Archive -Path "$release/*" -DestinationPath 'artifacts/LocalShare-Windows-Portable.zip' -Force
+          $iss = @"
+          [Setup]
+          AppId={{8D2D488C-246B-4BDC-8C24-7B10A65B9649}
+          AppName=LocalShare
+          AppVersion=1.0.0
+          AppPublisher=MographicCode
+          DefaultDirName={autopf}\LocalShare
+          DefaultGroupName=LocalShare
+          OutputDir=$($PWD.Path)\artifacts
+          OutputBaseFilename=LocalShare-Windows-Setup
+          Compression=lzma2
+          SolidCompression=yes
+          WizardStyle=modern
+          ArchitecturesAllowed=x64compatible
+          ArchitecturesInstallIn64BitMode=x64compatible
+          PrivilegesRequired=admin
+          UninstallDisplayIcon={app}\local_share.exe
+
+          [Files]
+          Source: "$release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+          [Icons]
+          Name: "{autoprograms}\LocalShare"; Filename: "{app}\local_share.exe"
+          Name: "{autodesktop}\LocalShare"; Filename: "{app}\local_share.exe"
+
+          [Run]
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""LocalShare TCP"" dir=in action=allow protocol=TCP localport=40404 profile=private"; Flags: runhidden
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""LocalShare UDP Discovery"" dir=in action=allow protocol=UDP localport=40405 profile=private"; Flags: runhidden
+          Filename: "{app}\local_share.exe"; Description: "Launch LocalShare"; Flags: nowait postinstall skipifsilent
+
+          [UninstallRun]
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare TCP"""; Flags: runhidden
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare UDP Discovery"""; Flags: runhidden
+          "@
+          Set-Content -Path installer.iss -Value $iss -Encoding UTF8
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) { throw 'Inno Setup 6 is not available.' }
+          & $iscc installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-FileHash artifacts/LocalShare-Windows-Setup.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  LocalShare-Windows-Setup.exe" } | Set-Content artifacts/LocalShare-Windows-Setup.exe.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: localshare-windows
+          path: artifacts/*
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [android, windows]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: flutter-local-share-v1
+      - uses: actions/download-artifact@v4
+        if: needs.android.result == 'success'
+        with:
+          name: localshare-android
+          path: downloaded/android
+      - uses: actions/download-artifact@v4
+        if: needs.windows.result == 'success'
+        with:
+          name: localshare-windows
+          path: downloaded/windows
+      - name: Publish result to source branch
+        shell: bash
+        run: |
+          mkdir -p ci_status
+          printf 'android=%s\nwindows=%s\nrun_id=%s\n' '${{ needs.android.result }}' '${{ needs.windows.result }}' '${{ github.run_id }}' > ci_status/localshare.txt
+          if [ '${{ needs.android.result }}' = 'success' ] && [ '${{ needs.windows.result }}' = 'success' ]; then
+            rm -rf release/localshare
+            mkdir -p release/localshare
+            cp downloaded/android/* release/localshare/
+            cp downloaded/windows/* release/localshare/
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ci_status release/localshare 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -m 'build: LocalShare CI result and binaries [skip ci]'
+            git push origin HEAD:flutter-local-share-v1
+          fi
