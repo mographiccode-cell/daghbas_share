@@ -16,7 +16,7 @@ class LocalShareCrypto {
           hashLength: 32,
         );
 
-  static const int protocolVersion = 2;
+  static const int protocolVersion = 3;
   static const int chunkSize = 256 * 1024;
 
   final Cipher cipher;
@@ -31,7 +31,10 @@ class LocalShareCrypto {
     String secondId,
   ) async {
     final ids = [firstId, secondId]..sort();
-    final nonce = <int>[...salt, ...utf8.encode('|${ids[0]}|${ids[1]}|LocalShare2')];
+    final nonce = <int>[
+      ...salt,
+      ...utf8.encode('|${ids[0]}|${ids[1]}|LocalShare3'),
+    ];
     final key = await pairKdf.deriveKeyFromPassword(password: code, nonce: nonce);
     return key.extractBytes();
   }
@@ -47,7 +50,7 @@ class LocalShareCrypto {
     final key = await hkdf.deriveKey(
       secretKey: SecretKey(pairKey),
       nonce: <int>[...b64d(clientNonce), ...b64d(serverNonce)],
-      info: utf8.encode('LocalShare2-session|${ids[0]}|${ids[1]}'),
+      info: utf8.encode('LocalShare3-session|${ids[0]}|${ids[1]}'),
     );
     return key.extractBytes();
   }
@@ -62,7 +65,7 @@ class LocalShareCrypto {
     final key = await hkdf.deriveKey(
       secretKey: SecretKey(sharedKey),
       nonce: <int>[...transferNonce, ...int64be(timestamp)],
-      info: utf8.encode('LocalShare2-transfer|$senderId|$receiverId'),
+      info: utf8.encode('LocalShare3-transfer|$senderId|$receiverId'),
     );
     return key.extractBytes();
   }
@@ -83,15 +86,16 @@ class LocalShareCrypto {
     required String transferNonce,
     required String fileName,
     required int size,
-  }) async {
-    final aad = metadataAad(senderId, receiverId, timestamp, transferNonce);
-    final box = await cipher.encrypt(
-      utf8.encode(jsonEncode({'name': fileName, 'size': size})),
-      secretKey: SecretKey(sharedKey),
-      nonce: randomBytes(cipher.nonceLength),
-      aad: aad,
+  }) {
+    return encryptPayload(
+      sharedKey: sharedKey,
+      senderId: senderId,
+      receiverId: receiverId,
+      timestamp: timestamp,
+      nonceId: transferNonce,
+      purpose: 'meta',
+      payload: {'name': fileName, 'size': size},
     );
-    return b64(box.concatenation());
   }
 
   Future<Map<String, dynamic>> decryptMetadata({
@@ -100,6 +104,45 @@ class LocalShareCrypto {
     required String receiverId,
     required int timestamp,
     required String transferNonce,
+    required String encodedBox,
+  }) {
+    return decryptPayload(
+      sharedKey: sharedKey,
+      senderId: senderId,
+      receiverId: receiverId,
+      timestamp: timestamp,
+      nonceId: transferNonce,
+      purpose: 'meta',
+      encodedBox: encodedBox,
+    );
+  }
+
+  Future<String> encryptPayload({
+    required List<int> sharedKey,
+    required String senderId,
+    required String receiverId,
+    required int timestamp,
+    required String nonceId,
+    required String purpose,
+    required Map<String, dynamic> payload,
+  }) async {
+    final aad = payloadAad(senderId, receiverId, timestamp, nonceId, purpose);
+    final box = await cipher.encrypt(
+      utf8.encode(jsonEncode(payload)),
+      secretKey: SecretKey(sharedKey),
+      nonce: randomBytes(cipher.nonceLength),
+      aad: aad,
+    );
+    return b64(box.concatenation());
+  }
+
+  Future<Map<String, dynamic>> decryptPayload({
+    required List<int> sharedKey,
+    required String senderId,
+    required String receiverId,
+    required int timestamp,
+    required String nonceId,
+    required String purpose,
     required String encodedBox,
   }) async {
     final raw = b64d(encodedBox);
@@ -111,11 +154,11 @@ class LocalShareCrypto {
     final clear = await cipher.decrypt(
       box,
       secretKey: SecretKey(sharedKey),
-      aad: metadataAad(senderId, receiverId, timestamp, transferNonce),
+      aad: payloadAad(senderId, receiverId, timestamp, nonceId, purpose),
     );
     final decoded = jsonDecode(utf8.decode(clear));
     if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Invalid encrypted metadata');
+      throw const FormatException('Invalid encrypted payload');
     }
     return decoded;
   }
@@ -126,8 +169,18 @@ class LocalShareCrypto {
     int timestamp,
     String transferNonce,
   ) {
+    return payloadAad(senderId, receiverId, timestamp, transferNonce, 'meta');
+  }
+
+  List<int> payloadAad(
+    String senderId,
+    String receiverId,
+    int timestamp,
+    String nonceId,
+    String purpose,
+  ) {
     return utf8.encode(
-      'LocalShare2-meta|$senderId|$receiverId|$timestamp|$transferNonce',
+      'LocalShare3-$purpose|$senderId|$receiverId|$timestamp|$nonceId',
     );
   }
 
@@ -153,7 +206,7 @@ class LocalShareCrypto {
     int total,
   ) {
     return utf8.encode(
-      'LocalShare2-chunk|$senderId|$receiverId|$timestamp|$transferNonce|$chunkIndex|$total',
+      'LocalShare3-chunk|$senderId|$receiverId|$timestamp|$transferNonce|$chunkIndex|$total',
     );
   }
 
