@@ -1,4 +1,4 @@
-name: LocalShare Android Diagnostic Smoke
+name: LocalShare Android Install Smoke
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   android-install:
-    name: Android APK emulator diagnostic
+    name: Android APK emulator smoke
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,7 +27,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Install, launch, and capture Android runtime
+      - name: Install and verify Android runtime
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -35,26 +35,13 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            set +e
             adb install -r smoke/android/LocalShare-Secure-Android.apk
-            INSTALL_RC=$?
             adb shell pm path com.mographiccode.local_share
             adb logcat -c
             adb shell am start -W -n com.mographiccode.local_share/.MainActivity
-            START_RC=$?
             sleep 10
-            PID=$(adb shell pidof com.mographiccode.local_share | tr -d '\r')
-            adb shell dumpsys activity activities > smoke/android/activities.txt
+            test -n "$(adb shell pidof com.mographiccode.local_share | tr -d '\r')"
+            adb shell dumpsys activity activities | grep -q 'ResumedActivity:.*com.mographiccode.local_share/.MainActivity'
             adb logcat -d -v threadtime > smoke/android/runtime-full.log
-            echo "INSTALL_RC=$INSTALL_RC START_RC=$START_RC PID=$PID"
-            echo '--- LocalShare log lines ---'
-            grep -i -E 'local_share|LocalShare|com.mographiccode.local_share|AndroidRuntime|FATAL EXCEPTION|flutter' smoke/android/runtime-full.log | tail -n 300 || true
-            echo '--- Activity lines ---'
-            grep -i 'com.mographiccode.local_share' smoke/android/activities.txt | head -n 50 || true
-            if [ "$INSTALL_RC" -ne 0 ] || [ "$START_RC" -ne 0 ] || [ -z "$PID" ]; then
-              exit 1
-            fi
-            if grep -E 'FATAL EXCEPTION|AndroidRuntime: FATAL' smoke/android/runtime-full.log; then
-              exit 1
-            fi
+            test -z "$(grep -E 'FATAL EXCEPTION|AndroidRuntime: FATAL' smoke/android/runtime-full.log | head -n 1)"
             adb uninstall com.mographiccode.local_share
