@@ -1,0 +1,170 @@
+name: Build WAQT v1.2 APK
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout WAQT v1.2 build branch
+        uses: actions/checkout@v4
+        with:
+          ref: waqt-v12-build
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.0'
+          channel: stable
+          cache: true
+
+      - name: Verify source, analyze, test and build
+        shell: bash
+        run: |
+          rm -rf app source ci-output-v12 waqt_v12.b64 waqt_v12.zip
+          mkdir -p ci-output-v12
+          set +e
+          (
+            set -e
+            echo '=== TOOLCHAIN ==='
+            flutter --version
+            java -version
+
+            echo '=== SOURCE INTEGRITY ==='
+            cat ci/v12/waqt_source.b64.* > waqt_v12.b64
+            base64 --decode waqt_v12.b64 > waqt_v12.zip
+            echo '625ac5c43a0ccaa697364ec5de04892dc426466037730a99f76985406e31d762  waqt_v12.zip' | sha256sum --check
+            unzip -t waqt_v12.zip
+
+            echo '=== UNPACK SOURCE ==='
+            mkdir source
+            unzip -q waqt_v12.zip -d source
+
+            echo '=== GENERATE RINGTONES ==='
+            python3 - <<'PY'
+          import math, wave, struct
+          from pathlib import Path
+          sr = 44100
+          raw = Path('source/waqt_alarm/android/app/src/main/res/raw')
+          raw.mkdir(parents=True, exist_ok=True)
+          def write(name, duration, fn, amp=.45):
+              n = int(sr * duration)
+              with wave.open(str(raw / f'{name}.wav'), 'w') as w:
+                  w.setnchannels(1); w.setsampwidth(2); w.setframerate(sr)
+                  frames = bytearray()
+                  for i in range(n):
+                      t = i / sr
+                      v = max(-1, min(1, fn(t)))
+                      frames += struct.pack('<h', int(v * amp * 32767))
+                  w.writeframes(frames)
+          write('waqt_classic', 4.0, lambda t: math.sin(2*math.pi*(880 if int(t*2)%2==0 else 660)*t) * (1 if (t%1.0)<.68 else 0))
+          write('waqt_soft', 5.0, lambda t: math.sin(2*math.pi*(440 if int(t)%2==0 else 523.25)*t) * ((0.5-0.5*math.cos(2*math.pi*min(t%1.0,.95)/.95)) if (t%1.0)<.95 else 0), amp=.28)
+          write('waqt_digital', 3.2, lambda t: math.sin(2*math.pi*1100*t) * (1 if (t%0.4)<.18 else 0), amp=.40)
+          for p in raw.glob('waqt_*.wav'):
+              print(p.name, p.stat().st_size)
+          PY
+
+            echo '=== CREATE ANDROID SCAFFOLD ==='
+            mkdir app
+            cd app
+            flutter create --platforms=android --org com.waqt --project-name waqt_alarm .
+            cd ..
+
+            echo '=== OVERLAY WAQT v1.2 SOURCE ==='
+            cp -R source/waqt_alarm/lib app/
+            rm -rf app/test
+            cp -R source/waqt_alarm/test app/test
+            cp source/waqt_alarm/pubspec.yaml app/pubspec.yaml
+            cp source/waqt_alarm/analysis_options.yaml app/analysis_options.yaml
+            cp ci/waqt_build.gradle.kts app/android/app/build.gradle.kts
+            cp source/waqt_alarm/android/app/src/main/AndroidManifest.xml app/android/app/src/main/AndroidManifest.xml
+            rm -rf app/android/app/src/main/kotlin
+            mkdir -p app/android/app/src/main/kotlin/com/waqt/alarm
+            cp ci/MainActivity.kt app/android/app/src/main/kotlin/com/waqt/alarm/MainActivity.kt
+
+            mkdir -p app/android/app/src/main/res/drawable app/android/app/src/main/res/raw app/android/app/src/main/res/values app/android/app/src/main/res/values-night
+            cp source/waqt_alarm/android/app/src/main/res/drawable/ic_stat_alarm.xml app/android/app/src/main/res/drawable/
+            cp source/waqt_alarm/android/app/src/main/res/raw/* app/android/app/src/main/res/raw/
+            cp source/waqt_alarm/android/app/src/main/res/values/styles.xml app/android/app/src/main/res/values/styles.xml
+            cp source/waqt_alarm/android/app/src/main/res/values/colors.xml app/android/app/src/main/res/values/colors.xml
+            cp source/waqt_alarm/android/app/src/main/res/values-night/styles.xml app/android/app/src/main/res/values-night/styles.xml
+
+            # Force the generated WAQT icon for every Android density.
+            rm -rf app/android/app/src/main/res/mipmap-*
+            for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              mkdir -p "app/android/app/src/main/res/mipmap-$density"
+              cp "source/waqt_alarm/android/app/src/main/res/mipmap-$density/ic_launcher.webp" "app/android/app/src/main/res/mipmap-$density/ic_launcher.webp"
+            done
+
+            echo '=== VERIFY UX FEATURES IN SOURCE ==='
+            grep -q "تم ضبط المنب" app/lib/screens/alarms/alarm_editor_screen.dart
+            grep -q "waqt_classic" app/lib/screens/alarms/alarm_editor_screen.dart
+            grep -q "كل يومين" app/lib/screens/medications/medication_editor_screen.dart
+            grep -q "بعد 3 ساعات" app/lib/screens/home/home_screen.dart
+            test -s app/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp
+            test -s app/android/app/src/main/res/raw/waqt_classic.wav
+            test -s app/android/app/src/main/res/raw/waqt_soft.wav
+            test -s app/android/app/src/main/res/raw/waqt_digital.wav
+
+            cd app
+            echo '=== PUB GET ==='
+            flutter pub get
+            echo '=== ANALYZE ==='
+            flutter analyze --no-fatal-infos
+            echo '=== TEST ==='
+            flutter test
+            echo '=== RELEASE BUILD ==='
+            flutter build apk --release --build-name=1.2.0 --build-number=3
+            cd ..
+
+            cp app/build/app/outputs/flutter-apk/app-release.apk ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk
+            echo '=== APK SIGNATURE VERIFY ==='
+            APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+            test -n "$APKSIGNER"
+            "$APKSIGNER" verify --verbose ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk
+            sha256sum ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk | tee ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk.sha256
+            ls -lh ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk
+            echo SUCCESS > ci-output-v12/status.txt
+          ) 2>&1 | tee ci-output-v12/build.log
+          result=${PIPESTATUS[0]}
+          if [ "$result" -ne 0 ]; then
+            echo "FAILED:$result" > ci-output-v12/status.txt
+          fi
+          echo "pipeline_exit=$result" >> ci-output-v12/status.txt
+          exit "$result"
+
+      - name: Publish build diagnostics and APK to build branch
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p ci-output-v12
+          if [ ! -f ci-output-v12/status.txt ]; then echo 'FAILED:setup-or-runner' > ci-output-v12/status.txt; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f ci-output-v12
+          git commit -m 'ci: WAQT v1.2 verified APK [skip ci]' || exit 0
+          git push origin HEAD:waqt-v12-build
+
+      - name: Upload verified APK artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WAQT-v1.2-APK
+          path: |
+            ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk
+            ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk.sha256
+          compression-level: 0
+          retention-days: 30
