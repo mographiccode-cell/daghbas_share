@@ -8,8 +8,18 @@ void main() {
       expect(safeFileName(r'C:\\temp\\photo.jpg'), 'photo.jpg');
     });
 
-    test('replaces invalid Windows characters', () {
+    test('replaces invalid and control characters', () {
       expect(safeFileName('bad:name?.pdf'), 'bad_name_.pdf');
+      expect(safeFileName('bad\u0000name.txt'), 'bad_name.txt');
+    });
+
+    test('blocks reserved Windows device names', () {
+      expect(safeFileName('CON'), '_CON');
+      expect(safeFileName('lpt1.txt'), '_lpt1.txt');
+    });
+
+    test('removes trailing dots and spaces', () {
+      expect(safeFileName('report.txt...  '), 'report.txt');
     });
 
     test('uses fallback for empty names', () {
