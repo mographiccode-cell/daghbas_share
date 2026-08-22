@@ -92,8 +92,11 @@ jobs:
             cp -R source/waqt_alarm/test app/test
             cp source/waqt_alarm/pubspec.yaml app/pubspec.yaml
             cp source/waqt_alarm/analysis_options.yaml app/analysis_options.yaml
-            cp source/waqt_alarm/android/app/build.gradle.kts app/android/app/build.gradle.kts
+            cp ci/waqt_build.gradle.kts app/android/app/build.gradle.kts
             cp source/waqt_alarm/android/app/src/main/AndroidManifest.xml app/android/app/src/main/AndroidManifest.xml
+            rm -rf app/android/app/src/main/kotlin
+            mkdir -p app/android/app/src/main/kotlin/com/waqt/alarm
+            cp ci/MainActivity.kt app/android/app/src/main/kotlin/com/waqt/alarm/MainActivity.kt
             mkdir -p app/android/app/src/main/res/drawable app/android/app/src/main/res/raw app/android/app/src/main/res/values app/android/app/src/main/res/values-night
             cp source/waqt_alarm/android/app/src/main/res/drawable/ic_stat_alarm.xml app/android/app/src/main/res/drawable/
             cp source/waqt_alarm/android/app/src/main/res/raw/keep.xml app/android/app/src/main/res/raw/
