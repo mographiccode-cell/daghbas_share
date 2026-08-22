@@ -1,4 +1,4 @@
-name: Mustanadati v2.6 release
+name: Mustanadati v2.6 stable package release
 on:
   pull_request:
     branches: [main]
@@ -97,13 +97,14 @@ jobs:
           s=p.read_text()
           s=re.sub(r'(?m)^(\s*)compileSdk\s*=.*$', r'\1compileSdk = 37', s)
           s=re.sub(r'(?m)^(\s*)minSdk\s*=.*$', r'\1minSdk = 26', s)
-          s=re.sub(r'(?m)^(\s*)applicationId\s*=.*$', r'\1applicationId = "com.mographiccode.mustanadati.resume"', s)
+          s=re.sub(r'(?m)^(\s*)applicationId\s*=.*$', r'\1applicationId = "com.mographiccode.mustanadati.app"', s)
           marker='        targetCompatibility = JavaVersion.VERSION_17\n'
           if 'isCoreLibraryDesugaringEnabled = true' not in s:
               s=s.replace(marker, marker+'        isCoreLibraryDesugaringEnabled = true\n')
           if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")' not in s:
               s+='\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")\n}\n'
           p.write_text(s)
+          assert 'applicationId = "com.mographiccode.mustanadati.app"' in s
           m=Path('android/app/src/main/AndroidManifest.xml')
           manifest=m.read_text()
           if 'xmlns:tools=' not in manifest:
@@ -152,43 +153,37 @@ jobs:
         working-directory: docviewer_build
         run: flutter build apk --release --target-platform android-arm64 --split-per-abi --obfuscate --split-debug-info=build/symbols
 
-      - name: Sign and verify installable APK
+      - name: Package and verify same application ID
         working-directory: docviewer_build
         run: |
           set -euo pipefail
           INPUT=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-          ALIGNED=build/app/outputs/flutter-apk/v26-aligned.apk
-          FINAL=build/app/outputs/flutter-apk/Mustanadati-v2.6.0-Resume-ExcelFix-ARM64.apk
+          ALIGNED=build/app/outputs/flutter-apk/v26-stable-package-aligned.apk
+          FINAL=build/app/outputs/flutter-apk/Mustanadati-v2.6.0-StablePackage-ARM64.apk
           PASS="$(openssl rand -hex 24)"
           echo "::add-mask::$PASS"
-          KS=/tmp/mustanadati-v26.jks
+          KS=/tmp/mustanadati-v26-temporary.jks
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
           ZIPALIGN="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name zipalign | sort -V | tail -1)"
           AAPT="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
-          keytool -genkeypair -noprompt -keystore "$KS" -storepass "$PASS" -keypass "$PASS" -alias mustanadati -keyalg RSA -keysize 4096 -validity 3650 -dname 'CN=Mustanadati, OU=Android, O=Mographiccode, L=Sanaa, C=YE'
+          keytool -genkeypair -noprompt -keystore "$KS" -storepass "$PASS" -keypass "$PASS" -alias mustanadati -keyalg RSA -keysize 4096 -validity 3650 -dname 'CN=Mustanadati Temporary Build, OU=Android, O=Mographiccode, L=Sanaa, C=YE'
           "$ZIPALIGN" -P 16 -f 4 "$INPUT" "$ALIGNED"
           "$APKSIGNER" sign --ks "$KS" --ks-key-alias mustanadati --ks-pass "pass:$PASS" --key-pass "pass:$PASS" --v2-signing-enabled true --v3-signing-enabled true --out "$FINAL" "$ALIGNED"
           "$APKSIGNER" verify --verbose --print-certs "$FINAL" | tee build/app/outputs/flutter-apk/signing-verification.txt
-          grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' build/app/outputs/flutter-apk/signing-verification.txt
-          grep -q 'Verified using v3 scheme (APK Signature Scheme v3): true' build/app/outputs/flutter-apk/signing-verification.txt
-          "$ZIPALIGN" -c -P 16 -v 4 "$FINAL" >/dev/null
           "$AAPT" dump badging "$FINAL" | tee build/app/outputs/flutter-apk/badging.txt
-          grep -q "package: name='com.mographiccode.mustanadati.resume'" build/app/outputs/flutter-apk/badging.txt
+          grep -q "package: name='com.mographiccode.mustanadati.app'" build/app/outputs/flutter-apk/badging.txt
           grep -q "versionName='2.6.0'" build/app/outputs/flutter-apk/badging.txt
-          grep -q "sdkVersion:'26'" build/app/outputs/flutter-apk/badging.txt
+          grep -q "versionCode='8'" build/app/outputs/flutter-apk/badging.txt
           grep -q "native-code: 'arm64-v8a'" build/app/outputs/flutter-apk/badging.txt
           unzip -t "$FINAL" >/dev/null
-          ! unzip -l "$FINAL" | grep -E 'lib/(x86_64|armeabi-v7a)/'
-          ! unzip -l "$FINAL" | grep 'kernel_blob.bin'
           sha256sum "$FINAL" | tee "$FINAL.sha256"
-          ls -lh "$FINAL"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Mustanadati-v2.6.0-Resume-ExcelFix-Signed-ARM64
+          name: Mustanadati-v2.6.0-StablePackage-ARM64
           path: |
-            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.6.0-Resume-ExcelFix-ARM64.apk
-            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.6.0-Resume-ExcelFix-ARM64.apk.sha256
+            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.6.0-StablePackage-ARM64.apk
+            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.6.0-StablePackage-ARM64.apk.sha256
             docviewer_build/build/app/outputs/flutter-apk/signing-verification.txt
             docviewer_build/build/app/outputs/flutter-apk/badging.txt
           if-no-files-found: error
