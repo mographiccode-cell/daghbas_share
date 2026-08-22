@@ -2,6 +2,10 @@ enum TransferDirection { send, receive }
 
 enum TransferStatus { queued, running, completed, failed }
 
+enum ChatMessageKind { text, link, file, system }
+
+enum ChatMessageDirection { send, receive }
+
 class DiscoveredDevice {
   const DiscoveredDevice({
     required this.deviceId,
@@ -106,6 +110,51 @@ class TransferItem {
   TransferStatus status;
   String? error;
   String? localPath;
+}
+
+class ChatMessage {
+  ChatMessage({
+    required this.id,
+    required this.peerId,
+    required this.peerName,
+    required this.kind,
+    required this.direction,
+    required this.sentAt,
+    this.text = '',
+    this.fileName,
+    this.fileSize,
+    this.localPath,
+    this.temporary = false,
+    this.savedPermanently = false,
+  });
+
+  final String id;
+  final String peerId;
+  final String peerName;
+  final ChatMessageKind kind;
+  final ChatMessageDirection direction;
+  final DateTime sentAt;
+  final String text;
+  final String? fileName;
+  final int? fileSize;
+  String? localPath;
+  bool temporary;
+  bool savedPermanently;
+
+  bool get isIncoming => direction == ChatMessageDirection.receive;
+  bool get isFile => kind == ChatMessageKind.file;
+  bool get canOpenFile => isFile && localPath != null && localPath!.isNotEmpty;
+}
+
+ChatMessageKind classifyChatText(String value) {
+  final text = value.trim();
+  final uri = Uri.tryParse(text);
+  if (uri != null &&
+      (uri.scheme.toLowerCase() == 'http' || uri.scheme.toLowerCase() == 'https') &&
+      uri.host.isNotEmpty) {
+    return ChatMessageKind.link;
+  }
+  return ChatMessageKind.text;
 }
 
 String safeFileName(String raw) {
