@@ -6,6 +6,11 @@ on:
       - waqt-apk-build
     paths-ignore:
       - 'ci-output/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - 'ci-output/**'
 
 permissions:
   contents: write
