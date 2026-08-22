@@ -1,0 +1,37 @@
+name: Export WAQT APK
+
+on:
+  push:
+    branches:
+      - waqt-apk-build
+    paths:
+      - '.github/workflows/export-waqt-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout verified build branch
+        uses: actions/checkout@v4
+        with:
+          ref: waqt-apk-build
+
+      - name: Verify APK checksum
+        shell: bash
+        run: |
+          test -f ci-output/WAQT-Advanced-Alarm-test.apk
+          echo '5c4602a785bf4bebb525076d4ad1802270d6d2bc030ad7d299a9d8bd81231095  ci-output/WAQT-Advanced-Alarm-test.apk' | sha256sum --check
+          file ci-output/WAQT-Advanced-Alarm-test.apk
+          ls -lh ci-output/WAQT-Advanced-Alarm-test.apk
+
+      - name: Upload verified APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: WAQT-Advanced-Alarm-APK
+          path: ci-output/WAQT-Advanced-Alarm-test.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
