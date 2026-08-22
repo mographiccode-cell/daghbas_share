@@ -12,7 +12,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   doc_viewer: 0.0.3
   docx_file_viewer: ^1.0.3
-  excel_plus: 2.14.2
+  excel: 4.0.6
   file_picker: ^12.0.0
   path: ^1.9.1
   path_provider: ^2.1.5
