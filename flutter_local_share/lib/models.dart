@@ -39,31 +39,27 @@ class Peer {
     required this.name,
     required this.ip,
     required this.port,
-    required this.outboundToken,
-    required this.inboundToken,
+    required this.sharedKey,
   });
 
   final String deviceId;
   final String name;
   final String ip;
   final int port;
-  final String outboundToken;
-  final String inboundToken;
+  final String sharedKey;
 
   Peer copyWith({
     String? name,
     String? ip,
     int? port,
-    String? outboundToken,
-    String? inboundToken,
+    String? sharedKey,
   }) {
     return Peer(
       deviceId: deviceId,
       name: name ?? this.name,
       ip: ip ?? this.ip,
       port: port ?? this.port,
-      outboundToken: outboundToken ?? this.outboundToken,
-      inboundToken: inboundToken ?? this.inboundToken,
+      sharedKey: sharedKey ?? this.sharedKey,
     );
   }
 
@@ -72,8 +68,7 @@ class Peer {
         'name': name,
         'ip': ip,
         'port': port,
-        'outboundToken': outboundToken,
-        'inboundToken': inboundToken,
+        'sharedKey': sharedKey,
       };
 
   factory Peer.fromJson(Map<String, dynamic> json) {
@@ -82,8 +77,7 @@ class Peer {
       name: json['name'] as String,
       ip: json['ip'] as String,
       port: (json['port'] as num).toInt(),
-      outboundToken: json['outboundToken'] as String,
-      inboundToken: json['inboundToken'] as String,
+      sharedKey: json['sharedKey'] as String,
     );
   }
 }
@@ -116,17 +110,34 @@ class TransferItem {
 
 String safeFileName(String raw) {
   var name = raw.split(RegExp(r'[\\/]')).last.trim();
-  name = name.replaceAll(RegExp(r'[\x00-\x1F<>:"|?*]'), '_');
+  name = name.replaceAll(RegExp(r'[\x00-\x1F\x7F<>:"|?*]'), '_');
+  name = name.replaceFirst(RegExp(r'[. ]+$'), '');
+
   if (name.isEmpty || name == '.' || name == '..') {
     return 'received_file';
   }
+
+  final dot = name.lastIndexOf('.');
+  final stem = (dot > 0 ? name.substring(0, dot) : name).trim();
+  final reserved = RegExp(
+    r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$',
+    caseSensitive: false,
+  );
+  if (reserved.hasMatch(stem)) {
+    name = '_$name';
+  }
+
   if (name.length > 180) {
-    final dot = name.lastIndexOf('.');
-    final ext = dot > 0 && name.length - dot <= 16 ? name.substring(dot) : '';
+    final extensionIndex = name.lastIndexOf('.');
+    final ext = extensionIndex > 0 && name.length - extensionIndex <= 16
+        ? name.substring(extensionIndex)
+        : '';
     final stemLimit = 180 - ext.length;
     name = '${name.substring(0, stemLimit)}$ext';
+    name = name.replaceFirst(RegExp(r'[. ]+$'), '');
   }
-  return name;
+
+  return name.isEmpty ? 'received_file' : name;
 }
 
 String formatBytes(int bytes) {
