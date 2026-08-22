@@ -1,16 +1,22 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
+import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:doc_viewer/doc_viewer.dart';
 import 'package:docx_file_viewer/docx_file_viewer.dart';
-import 'package:excel_plus/excel_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:two_dimensional_scrollables/two_dimensional_scrollables.dart';
+import 'package:xml/xml.dart';
 
 import '../models/document_item.dart';
 import '../services/reading_progress_service.dart';
+
+// Excel.decodeBytes is intentionally replaced by the internal XLSX parser below.
 
 class ViewerScreen extends StatelessWidget {
   final DocumentItem item;
@@ -384,9 +390,14 @@ class _ExcelViewer extends StatefulWidget {
 
 class _ExcelViewerState extends State<_ExcelViewer> {
   static const int _maxSafeBytes = 96 * 1024 * 1024;
-  late final Future<Excel> _workbook = _loadWorkbook();
+  late final Future<_XlsxWorkbook> _workbook = _loadWorkbook();
 
-  Future<Excel> _loadWorkbook() async {
+  Future<_XlsxWorkbook> _loadWorkbook() async {
+    if (widget.item.extension.toLowerCase() == 'xls') {
+      throw UnsupportedError(
+        'ملفات XLS القديمة تستخدم تنسيقًا ثنائيًا مختلفًا. افتح أو احفظ الملف بصيغة XLSX لعرضه داخل التطبيق.',
+      );
+    }
     final file = File(widget.item.path);
     if (!await file.exists()) {
       throw StateError('الملف لم يعد موجودًا في موقعه الحالي.');
@@ -398,19 +409,19 @@ class _ExcelViewerState extends State<_ExcelViewer> {
       );
     }
     final bytes = await file.readAsBytes();
-    return Excel.decodeBytesAsync(bytes);
+    return Isolate.run(() => _decodeXlsx(bytes));
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Excel>(
+    return FutureBuilder<_XlsxWorkbook>(
       future: _workbook,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const _LoadingDocument(
             icon: Icons.table_chart_rounded,
             title: 'جارٍ تجهيز ملف Excel',
-            message: 'يتم تحليل أوراق العمل في الخلفية…',
+            message: 'يتم تحليل أوراق العمل بأمان في الخلفية…',
           );
         }
         if (snapshot.hasError) {
@@ -418,17 +429,10 @@ class _ExcelViewerState extends State<_ExcelViewer> {
             icon: Icons.table_chart_outlined,
             title: 'تعذر فتح ملف Excel',
             message:
-                'لم يتم إغلاق التطبيق. قد يكون الملف تالفًا أو محميًا بكلمة مرور أو بصيغة Excel قديمة غير مدعومة بالكامل.\n\n${_friendlyError(snapshot.error)}',
+                'بقي التطبيق يعمل ولم يحدث Crash. قد يكون الملف تالفًا أو محميًا أو بصيغة XLS قديمة.\n\n${_friendlyError(snapshot.error)}',
           );
         }
         final workbook = snapshot.data!;
-        if (workbook.tables.isEmpty) {
-          return const _ViewerMessage(
-            icon: Icons.grid_off_rounded,
-            title: 'مصنف فارغ',
-            message: 'لم يتم العثور على أي أوراق عمل داخل الملف.',
-          );
-        }
         return _ExcelWorkbook(workbook: workbook);
       },
     );
@@ -436,14 +440,16 @@ class _ExcelViewerState extends State<_ExcelViewer> {
 
   String _friendlyError(Object? error) {
     if (error == null) return '';
-    final value = error.toString();
-    if (value.length <= 180) return value;
-    return '${value.substring(0, 180)}…';
+    final value = error.toString()
+        .replaceFirst('Bad state: ', '')
+        .replaceFirst('Unsupported operation: ', '');
+    if (value.length <= 220) return value;
+    return '${value.substring(0, 220)}…';
   }
 }
 
 class _ExcelWorkbook extends StatefulWidget {
-  final Excel workbook;
+  final _XlsxWorkbook workbook;
   const _ExcelWorkbook({required this.workbook});
 
   @override
@@ -451,12 +457,11 @@ class _ExcelWorkbook extends StatefulWidget {
 }
 
 class _ExcelWorkbookState extends State<_ExcelWorkbook> {
-  late final List<String> _sheetNames = widget.workbook.tables.keys.toList();
-  late String _selected = _sheetNames.first;
+  late int _selectedIndex = 0;
 
   @override
   Widget build(BuildContext context) {
-    final sheet = widget.workbook.tables[_selected]!;
+    final sheet = widget.workbook.sheets[_selectedIndex];
     final scheme = Theme.of(context).colorScheme;
     return Column(
       children: [
@@ -467,11 +472,11 @@ class _ExcelWorkbookState extends State<_ExcelWorkbook> {
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               scrollDirection: Axis.horizontal,
-              itemCount: _sheetNames.length,
+              itemCount: widget.workbook.sheets.length,
               separatorBuilder: (_, __) => const SizedBox(width: 7),
               itemBuilder: (_, index) {
-                final name = _sheetNames[index];
-                final selected = name == _selected;
+                final current = widget.workbook.sheets[index];
+                final selected = index == _selectedIndex;
                 return ChoiceChip(
                   selected: selected,
                   avatar: Icon(
@@ -479,8 +484,8 @@ class _ExcelWorkbookState extends State<_ExcelWorkbook> {
                     size: 16,
                     color: selected ? scheme.primary : scheme.onSurfaceVariant,
                   ),
-                  label: Text(name),
-                  onSelected: (_) => setState(() => _selected = name),
+                  label: Text(current.name),
+                  onSelected: (_) => setState(() => _selectedIndex = index),
                 );
               },
             ),
@@ -490,11 +495,25 @@ class _ExcelWorkbookState extends State<_ExcelWorkbook> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
           color: scheme.surfaceContainerLow,
-          child: Text(
-            '${sheet.maxRows} صف × ${sheet.maxColumns} عمود',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+          child: Row(
+            children: [
+              const Icon(Icons.table_rows_rounded, size: 17),
+              const SizedBox(width: 7),
+              Text(
+                '${sheet.maxRows} صف × ${sheet.maxColumns} عمود',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+              ),
+              const Spacer(),
+              Text(
+                'XLSX • عرض آمن',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: const Color(0xFF168A4A),
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ],
           ),
         ),
         Expanded(child: _ExcelGrid(sheet: sheet)),
@@ -504,7 +523,7 @@ class _ExcelWorkbookState extends State<_ExcelWorkbook> {
 }
 
 class _ExcelGrid extends StatelessWidget {
-  final Sheet sheet;
+  final _XlsxSheet sheet;
   const _ExcelGrid({required this.sheet});
 
   @override
@@ -512,7 +531,7 @@ class _ExcelGrid extends StatelessWidget {
     final rowCount = sheet.maxRows + 1;
     final columnCount = sheet.maxColumns + 1;
     return Directionality(
-      textDirection: sheet.isRTL ? TextDirection.rtl : TextDirection.ltr,
+      textDirection: sheet.isRtl ? TextDirection.rtl : TextDirection.ltr,
       child: TableView(
         diagonalDragBehavior: DiagonalDragBehavior.free,
         delegate: TableCellBuilderDelegate(
@@ -539,13 +558,13 @@ class _ExcelGrid extends StatelessWidget {
 
   double _columnWidth(int displayColumn) {
     if (displayColumn == 0) return 50;
-    final raw = sheet.getColumnWidth(displayColumn - 1);
+    final raw = sheet.columnWidths[displayColumn - 1] ?? 12.0;
     return (raw * 7.0 + 18).clamp(80.0, 280.0);
   }
 
   double _rowHeight(int displayRow) {
     if (displayRow == 0) return 38;
-    final raw = sheet.getRowHeight(displayRow - 1);
+    final raw = sheet.rowHeights[displayRow - 1] ?? 20.0;
     return (raw * 1.34).clamp(34.0, 120.0);
   }
 
@@ -576,53 +595,27 @@ class _ExcelGrid extends StatelessWidget {
       );
     }
 
-    final dataRow = sheet.row(row - 1);
-    final Data? cell = column - 1 < dataRow.length ? dataRow[column - 1] : null;
-    final style = cell?.cellStyle;
-    final background = _excelColor(style?.backgroundColor) ?? scheme.surface;
-    final foreground = _excelColor(style?.fontColor) ?? scheme.onSurface;
-    final alignment = switch (style?.horizontalAlignment) {
-      HorizontalAlign.Center => TextAlign.center,
-      HorizontalAlign.Right => TextAlign.right,
-      _ => TextAlign.left,
-    };
-
+    final value = sheet.cells[row - 1]?[column - 1] ?? '';
     return Container(
       alignment: Alignment.centerLeft,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: background,
+        color: scheme.surface,
         border: Border(
-          right: BorderSide(color: scheme.outlineVariant.withValues(alpha: .55)),
-          bottom: BorderSide(color: scheme.outlineVariant.withValues(alpha: .55)),
+          right: BorderSide(
+            color: scheme.outlineVariant.withValues(alpha: .55),
+          ),
+          bottom: BorderSide(
+            color: scheme.outlineVariant.withValues(alpha: .55),
+          ),
         ),
       ),
-      child: Text(
-        cell?.value?.toString() ?? '',
+      child: SelectableText(
+        value,
         maxLines: 4,
-        overflow: TextOverflow.ellipsis,
-        textAlign: alignment,
-        style: TextStyle(
-          color: foreground,
-          fontSize: (style?.fontSize ?? 12).toDouble().clamp(9, 22),
-          fontWeight: style?.isBold == true ? FontWeight.w700 : FontWeight.w400,
-          fontStyle: style?.isItalic == true ? FontStyle.italic : FontStyle.normal,
-        ),
+        style: const TextStyle(fontSize: 12.5),
       ),
     );
-  }
-
-  Color? _excelColor(ExcelColor? value) {
-    if (value == null) return null;
-    var hex = value.colorHex.replaceAll('#', '').trim();
-    if (hex.isEmpty || hex.toLowerCase() == 'none') return null;
-    try {
-      if (hex.length == 6) hex = 'FF$hex';
-      if (hex.length != 8) return null;
-      return Color(int.parse(hex, radix: 16));
-    } catch (_) {
-      return null;
-    }
   }
 
   String _columnLabel(int index) {
@@ -845,4 +838,246 @@ class _ViewerMessage extends StatelessWidget {
           ),
         ),
       );
+}
+
+class _XlsxWorkbook {
+  final List<_XlsxSheet> sheets;
+  const _XlsxWorkbook(this.sheets);
+}
+
+class _XlsxSheet {
+  final String name;
+  final int maxRows;
+  final int maxColumns;
+  final bool isRtl;
+  final Map<int, Map<int, String>> cells;
+  final Map<int, double> columnWidths;
+  final Map<int, double> rowHeights;
+
+  const _XlsxSheet({
+    required this.name,
+    required this.maxRows,
+    required this.maxColumns,
+    required this.isRtl,
+    required this.cells,
+    required this.columnWidths,
+    required this.rowHeights,
+  });
+}
+
+_XlsxWorkbook _decodeXlsx(Uint8List bytes) {
+  if (bytes.length < 4 ||
+      bytes[0] != 0x50 ||
+      bytes[1] != 0x4B ||
+      bytes[2] != 0x03 ||
+      bytes[3] != 0x04) {
+    throw const FormatException(
+      'هذه ليست حزمة XLSX حديثة. ملفات XLS القديمة لا تُعرض في العارض الآمن الحالي.',
+    );
+  }
+
+  final archive = ZipDecoder().decodeBytes(bytes, verify: true);
+  final workbook = _xlsxXml(archive, 'xl/workbook.xml');
+  final relationships = _xlsxXml(archive, 'xl/_rels/workbook.xml.rels');
+  final sharedStrings = _xlsxSharedStrings(archive);
+
+  final relationTargets = <String, String>{};
+  for (final rel in relationships.descendants.whereType<XmlElement>()) {
+    if (rel.name.local != 'Relationship') continue;
+    final id = _xlsxAttr(rel, 'Id');
+    final target = _xlsxAttr(rel, 'Target');
+    if (id == null || target == null) continue;
+    relationTargets[id] = _xlsxResolveTarget(target);
+  }
+
+  final sheets = <_XlsxSheet>[];
+  for (final node in workbook.descendants.whereType<XmlElement>()) {
+    if (node.name.local != 'sheet') continue;
+    final name = _xlsxAttr(node, 'name') ?? 'Sheet ${sheets.length + 1}';
+    final relationId = _xlsxAttr(node, 'id');
+    if (relationId == null) continue;
+    final target = relationTargets[relationId];
+    if (target == null) continue;
+    final sheetXml = _xlsxXml(archive, target);
+    sheets.add(_xlsxParseSheet(name, sheetXml, sharedStrings));
+  }
+
+  if (sheets.isEmpty) {
+    throw const FormatException('لم يتم العثور على أوراق عمل قابلة للقراءة داخل الملف.');
+  }
+  return _XlsxWorkbook(List.unmodifiable(sheets));
+}
+
+_XlsxSheet _xlsxParseSheet(
+  String name,
+  XmlDocument document,
+  List<String> sharedStrings,
+) {
+  final cells = <int, Map<int, String>>{};
+  final widths = <int, double>{};
+  final heights = <int, double>{};
+  var maxRow = 0;
+  var maxColumn = 0;
+  var isRtl = false;
+
+  for (final node in document.descendants.whereType<XmlElement>()) {
+    if (node.name.local == 'sheetView') {
+      final rtl = _xlsxAttr(node, 'rightToLeft');
+      if (rtl == '1' || rtl?.toLowerCase() == 'true') isRtl = true;
+      continue;
+    }
+    if (node.name.local == 'col') {
+      final min = int.tryParse(_xlsxAttr(node, 'min') ?? '');
+      final max = int.tryParse(_xlsxAttr(node, 'max') ?? '');
+      final width = double.tryParse(_xlsxAttr(node, 'width') ?? '');
+      if (min != null && max != null && width != null) {
+        for (var col = min - 1; col <= max - 1 && col < 16384; col++) {
+          widths[col] = width;
+        }
+      }
+      continue;
+    }
+    if (node.name.local == 'row') {
+      final rowNumber = int.tryParse(_xlsxAttr(node, 'r') ?? '');
+      final height = double.tryParse(_xlsxAttr(node, 'ht') ?? '');
+      if (rowNumber != null && height != null) {
+        heights[rowNumber - 1] = height;
+      }
+      continue;
+    }
+    if (node.name.local != 'c') continue;
+
+    final reference = _xlsxAttr(node, 'r');
+    if (reference == null) continue;
+    final coordinate = _xlsxCoordinate(reference);
+    if (coordinate == null) continue;
+    final row = coordinate.$1;
+    final column = coordinate.$2;
+    final value = _xlsxCellValue(node, sharedStrings);
+    if (value.isNotEmpty) {
+      (cells[row] ??= <int, String>{})[column] = value;
+    }
+    if (row + 1 > maxRow) maxRow = row + 1;
+    if (column + 1 > maxColumn) maxColumn = column + 1;
+  }
+
+  for (final dimension in document.descendants.whereType<XmlElement>()) {
+    if (dimension.name.local != 'dimension') continue;
+    final ref = _xlsxAttr(dimension, 'ref');
+    if (ref == null) break;
+    final last = ref.contains(':') ? ref.split(':').last : ref;
+    final coordinate = _xlsxCoordinate(last);
+    if (coordinate != null) {
+      if (coordinate.$1 + 1 > maxRow) maxRow = coordinate.$1 + 1;
+      if (coordinate.$2 + 1 > maxColumn) maxColumn = coordinate.$2 + 1;
+    }
+    break;
+  }
+
+  maxRow = maxRow.clamp(1, 1048576);
+  maxColumn = maxColumn.clamp(1, 16384);
+
+  return _XlsxSheet(
+    name: name,
+    maxRows: maxRow,
+    maxColumns: maxColumn,
+    isRtl: isRtl,
+    cells: cells,
+    columnWidths: widths,
+    rowHeights: heights,
+  );
+}
+
+String _xlsxCellValue(XmlElement cell, List<String> sharedStrings) {
+  final type = _xlsxAttr(cell, 't');
+  if (type == 'inlineStr') {
+    return cell.descendants
+        .whereType<XmlElement>()
+        .where((e) => e.name.local == 't')
+        .map((e) => e.innerText)
+        .join();
+  }
+
+  String raw = '';
+  for (final child in cell.children.whereType<XmlElement>()) {
+    if (child.name.local == 'v') {
+      raw = child.innerText;
+      break;
+    }
+  }
+
+  if (type == 's') {
+    final index = int.tryParse(raw);
+    if (index != null && index >= 0 && index < sharedStrings.length) {
+      return sharedStrings[index];
+    }
+  }
+  if (type == 'b') return raw == '1' ? 'TRUE' : 'FALSE';
+  return raw;
+}
+
+List<String> _xlsxSharedStrings(Archive archive) {
+  final file = _xlsxFind(archive, 'xl/sharedStrings.xml');
+  if (file == null) return const [];
+  final bytes = file.readBytes();
+  if (bytes == null) return const [];
+  final document = XmlDocument.parse(utf8.decode(bytes, allowMalformed: true));
+  return document.descendants
+      .whereType<XmlElement>()
+      .where((e) => e.name.local == 'si')
+      .map(
+        (si) => si.descendants
+            .whereType<XmlElement>()
+            .where((e) => e.name.local == 't')
+            .map((t) => t.innerText)
+            .join(),
+      )
+      .toList(growable: false);
+}
+
+XmlDocument _xlsxXml(Archive archive, String name) {
+  final file = _xlsxFind(archive, name);
+  if (file == null) throw FormatException('جزء XLSX مفقود: $name');
+  final bytes = file.readBytes();
+  if (bytes == null) throw FormatException('تعذر قراءة جزء XLSX: $name');
+  return XmlDocument.parse(utf8.decode(bytes, allowMalformed: true));
+}
+
+ArchiveFile? _xlsxFind(Archive archive, String name) {
+  final normalized = p.posix.normalize(name).replaceFirst(RegExp(r'^/'), '');
+  for (final file in archive.files) {
+    if (p.posix.normalize(file.name).replaceFirst(RegExp(r'^/'), '') ==
+        normalized) {
+      return file;
+    }
+  }
+  return null;
+}
+
+String _xlsxResolveTarget(String target) {
+  var value = target.replaceAll('\\', '/');
+  if (value.startsWith('/')) value = value.substring(1);
+  if (value.startsWith('xl/')) return p.posix.normalize(value);
+  return p.posix.normalize(p.posix.join('xl', value));
+}
+
+String? _xlsxAttr(XmlElement element, String localName) {
+  for (final attribute in element.attributes) {
+    if (attribute.name.local == localName) return attribute.value;
+  }
+  return null;
+}
+
+(int, int)? _xlsxCoordinate(String reference) {
+  final match = RegExp(r'^([A-Za-z]+)([0-9]+)').firstMatch(reference);
+  if (match == null) return null;
+  final letters = match.group(1)!.toUpperCase();
+  final rowNumber = int.tryParse(match.group(2)!);
+  if (rowNumber == null || rowNumber < 1) return null;
+  var column = 0;
+  for (final unit in letters.codeUnits) {
+    column = column * 26 + (unit - 64);
+  }
+  if (column < 1) return null;
+  return (rowNumber - 1, column - 1);
 }
