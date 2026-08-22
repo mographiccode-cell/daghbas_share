@@ -128,7 +128,7 @@ Try `flutter pub outdated` for more information.
 Upgrading analysis_options.yaml to exclude build and platform directories.
 === ANALYZE ===
 Analyzing app...                                                
-No issues found! (ran in 9.8s)
+No issues found! (ran in 8.9s)
 === TEST ===
 
 ::group::✅ Passing tests
@@ -140,36 +140,17 @@ No issues found! (ran in 9.8s)
 
 🎉 4 tests passed.
 === RELEASE APK BUILD ===
-Upgrading build.gradle.kts
 Running Gradle task 'assembleRelease'...                        
-e: file:///home/runner/work/daghbas_share/daghbas_share/app/android/app/build.gradle.kts:19:9: 'var jvmTarget: String' is deprecated. Please migrate to the compilerOptions DSL. More details are here: https://kotl.in/u1r8ln.
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): flutter_timezone, sensors_plus
+Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
 
-FAILURE: Build failed with an exception.
+Please check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.
+If no such version exists, report the issue to the plugin. If necessary, here is a guide on filing
+an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
 
-* Where:
-Build file '/home/runner/work/daghbas_share/daghbas_share/app/android/app/build.gradle.kts' line: 7
-
-* What went wrong:
-Script compilation errors:
-
-  Line 07: android {
-           ^ 'fun Project.android(configure: Action<BaseAppModuleExtension>): Unit' is deprecated. Replaced by com.android.build.api.dsl.ApplicationExtension.
-               This class is not used for the public extensions in AGP when android.newDsl=true, which is the default in AGP 9.0, and will be removed in AGP 10.0.
-
-  Line 18:     kotlinOptions {
-               ^ 'fun BaseAppModuleExtension.kotlinOptions(configure: Action<DeprecatedKotlinJvmOptions>): Unit' is deprecated. Please migrate to the compilerOptions DSL. More details are here: https://kotl.in/u1r8ln.
-
-  Line 19:         jvmTarget = JavaVersion.VERSION_17.toString()
-                   ^ 'var jvmTarget: String' is deprecated. Please migrate to the compilerOptions DSL. More details are here: https://kotl.in/u1r8ln.
-
-3 errors
-
-* Try:
-> Run with --stacktrace option to get the stack trace.
-> Run with --info or --debug option to get more log output.
-> Run with --scan to get full insights from a Build Scan (powered by Develocity).
-> Get more help at https://help.gradle.org.
-
-BUILD FAILED in 1m 30s
-Running Gradle task 'assembleRelease'...                           91.3s
-Gradle task assembleRelease failed with exit code 1
+If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 9100 bytes (99.4% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Caught exception: Already watching path: /home/runner/work/daghbas_share/daghbas_share/app/android
+Running Gradle task 'assembleRelease'...                          243.8s
+✓ Built build/app/outputs/flutter-apk/app-release.apk (56.3MB)
+5c4602a785bf4bebb525076d4ad1802270d6d2bc030ad7d299a9d8bd81231095  ci-output/WAQT-Advanced-Alarm-test.apk

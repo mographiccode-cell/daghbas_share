@@ -1,2 +1,2 @@
-FAILED:1
-pipeline_exit=1
+SUCCESS
+pipeline_exit=0
