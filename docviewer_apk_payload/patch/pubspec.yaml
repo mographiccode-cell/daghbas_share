@@ -9,10 +9,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  archive: ^4.0.9
   cupertino_icons: ^1.0.8
   doc_viewer: 0.0.3
   docx_file_viewer: ^1.0.3
-  excel: 4.0.6
   file_picker: ^12.0.0
   path: ^1.9.1
   path_provider: ^2.1.5
@@ -21,6 +21,7 @@ dependencies:
   shared_preferences: ^2.5.5
   sqflite: ^2.4.3
   two_dimensional_scrollables: ^0.5.3
+  xml: ^6.6.1
 
 dev_dependencies:
   flutter_test:
