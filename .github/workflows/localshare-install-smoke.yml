@@ -1,0 +1,87 @@
+name: LocalShare Install Smoke
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  windows-install:
+    name: Windows installer smoke
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download exact released Windows artifact
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force smoke/windows | Out-Null
+          gh run download 32579936031 -n LocalShare-Secure-Windows -D smoke/windows
+          if (-not (Test-Path smoke/windows/LocalShare-Secure-Windows-Setup.exe)) { throw 'Setup EXE missing' }
+      - name: Install, launch, verify firewall, uninstall
+        shell: pwsh
+        run: |
+          $setup = (Resolve-Path 'smoke/windows/LocalShare-Secure-Windows-Setup.exe').Path
+          $install = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Installer exit code $($install.ExitCode)" }
+          $exe = 'C:\Program Files\LocalShare\local_share.exe'
+          if (-not (Test-Path $exe)) { throw 'Installed local_share.exe missing' }
+          $proc = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 8
+          if ($proc.HasExited) { throw "LocalShare exited unexpectedly with code $($proc.ExitCode)" }
+          if (-not (Get-NetFirewallRule -DisplayName 'LocalShare TCP' -ErrorAction SilentlyContinue)) { throw 'TCP firewall rule missing' }
+          if (-not (Get-NetFirewallRule -DisplayName 'LocalShare UDP Discovery' -ErrorAction SilentlyContinue)) { throw 'UDP firewall rule missing' }
+          Stop-Process -Id $proc.Id -Force
+          $uninstaller = 'C:\Program Files\LocalShare\unins000.exe'
+          if (-not (Test-Path $uninstaller)) { throw 'Uninstaller missing' }
+          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "Uninstaller exit code $($uninstall.ExitCode)" }
+          Start-Sleep -Seconds 2
+          if (Test-Path $exe) { throw 'Application executable still exists after uninstall' }
+          if (Get-NetFirewallRule -DisplayName 'LocalShare TCP' -ErrorAction SilentlyContinue) { throw 'TCP firewall rule remained after uninstall' }
+          if (Get-NetFirewallRule -DisplayName 'LocalShare UDP Discovery' -ErrorAction SilentlyContinue) { throw 'UDP firewall rule remained after uninstall' }
+
+  android-install:
+    name: Android APK emulator smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download exact released Android artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p smoke/android
+          gh run download 32579936031 -n LocalShare-Secure-Android -D smoke/android
+          test -f smoke/android/LocalShare-Secure-Android.apk
+          unzip -t smoke/android/LocalShare-Secure-Android.apk >/dev/null
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install and launch on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            adb install -r smoke/android/LocalShare-Secure-Android.apk
+            adb shell pm path com.mographiccode.local_share
+            adb logcat -c
+            adb shell am start -W -n com.mographiccode.local_share/.MainActivity
+            sleep 8
+            PID=$(adb shell pidof com.mographiccode.local_share | tr -d '\r')
+            test -n "$PID"
+            adb shell dumpsys activity activities | grep -q 'com.mographiccode.local_share'
+            adb logcat --pid="$PID" -d > smoke/android/runtime.log
+            if grep -E 'FATAL EXCEPTION|AndroidRuntime: FATAL' smoke/android/runtime.log; then
+              cat smoke/android/runtime.log
+              exit 1
+            fi
+            adb uninstall com.mographiccode.local_share
