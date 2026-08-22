@@ -138,13 +138,13 @@ jobs:
           Name: "{autodesktop}\LocalShare"; Filename: "{app}\local_share.exe"; Tasks: desktopicon
 
           [Run]
-          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=\"LocalShare TCP\" dir=in action=allow protocol=TCP localport=40404 profile=private"; Flags: runhidden
-          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=\"LocalShare UDP Discovery\" dir=in action=allow protocol=UDP localport=40405 profile=private"; Flags: runhidden
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""LocalShare TCP"" dir=in action=allow protocol=TCP localport=40404 profile=private"; Flags: runhidden
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""LocalShare UDP Discovery"" dir=in action=allow protocol=UDP localport=40405 profile=private"; Flags: runhidden
           Filename: "{app}\local_share.exe"; Description: "Launch LocalShare"; Flags: nowait postinstall skipifsilent
 
           [UninstallRun]
-          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=\"LocalShare TCP\""; Flags: runhidden
-          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=\"LocalShare UDP Discovery\""; Flags: runhidden
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare TCP"""; Flags: runhidden
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare UDP Discovery"""; Flags: runhidden
           "@
           Set-Content -Path installer.iss -Value $iss -Encoding UTF8
 
@@ -161,9 +161,38 @@ jobs:
           path: artifacts/*
           if-no-files-found: error
 
+  report:
+    name: Report build result
+    needs: [android, windows]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: flutter-local-share-v1
+
+      - name: Write CI result to branch
+        shell: bash
+        run: |
+          mkdir -p ci_status
+          cat > ci_status/localshare.txt <<EOF
+          android=${{ needs.android.result }}
+          windows=${{ needs.windows.result }}
+          source_sha=${{ github.sha }}
+          run_id=${{ github.run_id }}
+          EOF
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ci_status/localshare.txt
+          if ! git diff --cached --quiet; then
+            git commit -m 'ci: record LocalShare build result [skip ci]'
+            git push origin HEAD:flutter-local-share-v1
+          fi
+
   publish:
     name: Publish binaries to branch
-    needs: [android, windows]
+    needs: [android, windows, report]
+    if: needs.android.result == 'success' && needs.windows.result == 'success' && needs.report.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -190,7 +219,7 @@ jobs:
           cat > release/localshare/BUILD_INFO.txt <<'EOF'
           LocalShare 1.0.0
           Android: release APK
-          Windows: signed-status unknown; installer produced with Inno Setup from Flutter release build.
+          Windows: Inno Setup installer + portable ZIP from Flutter release build.
           Transport: direct HTTP streaming over local Wi-Fi/LAN.
           TCP: 40404
           UDP discovery: 40405
