@@ -1,0 +1,195 @@
+name: Mustanadati v2.6 release
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build-v26:
+    if: github.head_ref == 'docviewer-apk-build-20260821'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.7'
+          channel: stable
+          cache: true
+
+      - name: Reconstruct v2.6
+        run: |
+          mkdir -p docviewer_build
+          cat docviewer_apk_payload/part*.b64 | base64 -d > /tmp/docviewer.tar.gz
+          tar -xzf /tmp/docviewer.tar.gz -C docviewer_build
+          touch docviewer_build/README.md
+          cp docviewer_apk_payload/patch/pubspec.yaml docviewer_build/pubspec.yaml
+          cp docviewer_apk_payload/patch/document_item.dart docviewer_build/lib/models/document_item.dart
+          cp docviewer_apk_payload/patch/viewer_screen.dart docviewer_build/lib/screens/viewer_screen.dart
+          cp docviewer_apk_payload/patch/home_screen.dart docviewer_build/lib/screens/home_screen.dart
+          cp docviewer_apk_payload/patch/document_tile.dart docviewer_build/lib/widgets/document_tile.dart
+          cp docviewer_apk_payload/patch/main.dart docviewer_build/lib/main.dart
+          cp docviewer_apk_payload/patch/reading_progress_service.dart docviewer_build/lib/services/reading_progress_service.dart
+          sed -i '/allowMultiple: true,/d' docviewer_build/lib/services/file_service.dart
+          sed -i 's/separatorBuilder: (_, __)/separatorBuilder: (_, _)/g' docviewer_build/lib/screens/viewer_screen.dart
+          rm -f docviewer_build/lib/services/document_viewer_service.dart
+          grep -q 'version: 2.6.0+8' docviewer_build/pubspec.yaml
+          grep -q 'savePdfPage' docviewer_build/lib/screens/viewer_screen.dart
+          grep -q 'saveDocxOffset' docviewer_build/lib/screens/viewer_screen.dart
+          grep -q '_decodeXlsx' docviewer_build/lib/screens/viewer_screen.dart
+          ! grep -A10 'item.kind == DocumentKind.excel' docviewer_build/lib/screens/viewer_screen.dart | grep 'DocViewerView'
+
+      - name: Bootstrap Android
+        working-directory: docviewer_build
+        run: bash tool/bootstrap_android.sh
+
+      - name: Enable DOCX external scroll controller
+        working-directory: docviewer_build
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          p = Path(os.environ['PUB_CACHE']) / 'hosted' / 'pub.dev' / 'docx_file_viewer-1.0.3' / 'lib' / 'src' / 'docx_view.dart'
+          s = p.read_text()
+          if 'final ScrollController? scrollController;' not in s:
+              s = s.replace(
+                  '  final DocxSearchController? searchController;\n',
+                  '  final DocxSearchController? searchController;\n\n  final ScrollController? scrollController;\n',
+                  1,
+              )
+          if '    this.scrollController,\n' not in s:
+              s = s.replace(
+                  '    this.searchController,\n    this.onLoaded,\n',
+                  '    this.searchController,\n    this.scrollController,\n    this.onLoaded,\n',
+                  1,
+              )
+          if 'controller: widget.scrollController,' not in s:
+              s = s.replace(
+                  '    final list = SingleChildScrollView(\n      padding: widget.config.padding,\n',
+                  '    final list = SingleChildScrollView(\n      controller: widget.scrollController,\n      padding: widget.config.padding,\n',
+                  1,
+              )
+          p.write_text(s)
+          assert 'final ScrollController? scrollController;' in s
+          assert 'this.scrollController,' in s
+          assert 'controller: widget.scrollController,' in s
+          PY
+
+      - name: Apply adaptive icon and Android compatibility
+        working-directory: docviewer_build
+        run: |
+          mkdir -p android/app/src/main/res/drawable android/app/src/main/res/mipmap-anydpi-v26 android/app/src/main/res/mipmap-anydpi-v33 android/app/src/main/res/values
+          cp ../docviewer_apk_payload/patch/ic_launcher_foreground.xml android/app/src/main/res/drawable/ic_launcher_foreground.xml
+          cp ../docviewer_apk_payload/patch/ic_launcher_monochrome.xml android/app/src/main/res/drawable/ic_launcher_monochrome.xml
+          cp ../docviewer_apk_payload/patch/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          cp ../docviewer_apk_payload/patch/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          cp ../docviewer_apk_payload/patch/ic_launcher_v33.xml android/app/src/main/res/mipmap-anydpi-v33/ic_launcher.xml
+          cp ../docviewer_apk_payload/patch/ic_launcher_v33.xml android/app/src/main/res/mipmap-anydpi-v33/ic_launcher_round.xml
+          cp ../docviewer_apk_payload/patch/colors.xml android/app/src/main/res/values/ic_launcher_colors.xml
+          plugin_dir="$PUB_CACHE/hosted/pub.dev/doc_viewer-0.0.3"
+          grep -RIl 'com.github.barteksc:android-pdf-viewer:2.8.2' "$plugin_dir" | while read -r f; do
+            sed -i 's#com.github.barteksc:android-pdf-viewer:2.8.2#com.github.mhiew:android-pdf-viewer:3.2.0-beta.3#g' "$f"
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('android/app/build.gradle.kts')
+          s=p.read_text()
+          s=re.sub(r'(?m)^(\s*)compileSdk\s*=.*$', r'\1compileSdk = 37', s)
+          s=re.sub(r'(?m)^(\s*)minSdk\s*=.*$', r'\1minSdk = 26', s)
+          s=re.sub(r'(?m)^(\s*)applicationId\s*=.*$', r'\1applicationId = "com.mographiccode.mustanadati.resume"', s)
+          marker='        targetCompatibility = JavaVersion.VERSION_17\n'
+          if 'isCoreLibraryDesugaringEnabled = true' not in s:
+              s=s.replace(marker, marker+'        isCoreLibraryDesugaringEnabled = true\n')
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")' not in s:
+              s+='\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")\n}\n'
+          p.write_text(s)
+          m=Path('android/app/src/main/AndroidManifest.xml')
+          manifest=m.read_text()
+          if 'xmlns:tools=' not in manifest:
+              manifest=manifest.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android"','<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n    xmlns:tools="http://schemas.android.com/tools"')
+          for permission in ['android.permission.READ_MEDIA_IMAGES','android.permission.READ_MEDIA_VIDEO','android.permission.READ_MEDIA_AUDIO']:
+              node=f'    <uses-permission android:name="{permission}" tools:node="remove" />\n'
+              if node.strip() not in manifest:
+                  manifest=manifest.replace('<application', node+'<application', 1)
+          if 'android:roundIcon=' not in manifest:
+              manifest=manifest.replace('android:icon="@mipmap/ic_launcher"\n','android:icon="@mipmap/ic_launcher"\n        android:roundIcon="@mipmap/ic_launcher_round"\n')
+          m.write_text(manifest)
+          PY
+
+      - name: Analyze
+        working-directory: docviewer_build
+        run: |
+          rm -f test/widget_test.dart
+          flutter analyze --fatal-infos
+
+      - name: Tests and regression guards
+        working-directory: docviewer_build
+        run: |
+          mkdir -p test
+          cat > test/v26_test.dart <<'DART'
+          import 'package:flutter_test/flutter_test.dart';
+          import 'package:universal_doc_viewer/models/document_item.dart';
+          void main() {
+            test('document routing remains correct', () {
+              expect(DocumentItem.kindForExtension('pdf'), DocumentKind.pdf);
+              expect(DocumentItem.kindForExtension('docx'), DocumentKind.word);
+              expect(DocumentItem.kindForExtension('xlsx'), DocumentKind.excel);
+              expect(DocumentItem.kindForExtension('pptx'), DocumentKind.powerpoint);
+            });
+          }
+          DART
+          flutter test test/v26_test.dart
+          grep -q 'initialPageNumber' lib/screens/viewer_screen.dart
+          grep -q 'savePdfPage' lib/screens/viewer_screen.dart
+          grep -q 'scrollController: _documentScroll' lib/screens/viewer_screen.dart
+          grep -q 'saveDocxOffset' lib/screens/viewer_screen.dart
+          grep -q 'Isolate.run' lib/screens/viewer_screen.dart
+          grep -q 'ZipDecoder().decodeBytes' lib/screens/viewer_screen.dart
+          ! grep -A10 'item.kind == DocumentKind.excel' lib/screens/viewer_screen.dart | grep 'DocViewerView'
+
+      - name: Build ARM64 Release
+        working-directory: docviewer_build
+        run: flutter build apk --release --target-platform android-arm64 --split-per-abi --obfuscate --split-debug-info=build/symbols
+
+      - name: Sign and verify installable APK
+        working-directory: docviewer_build
+        run: |
+          set -euo pipefail
+          INPUT=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          ALIGNED=build/app/outputs/flutter-apk/v26-aligned.apk
+          FINAL=build/app/outputs/flutter-apk/Mustanadati-v2.6.0-Resume-ExcelFix-ARM64.apk
+          PASS="$(openssl rand -hex 24)"
+          echo "::add-mask::$PASS"
+          KS=/tmp/mustanadati-v26.jks
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
+          ZIPALIGN="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name zipalign | sort -V | tail -1)"
+          AAPT="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
+          keytool -genkeypair -noprompt -keystore "$KS" -storepass "$PASS" -keypass "$PASS" -alias mustanadati -keyalg RSA -keysize 4096 -validity 3650 -dname 'CN=Mustanadati, OU=Android, O=Mographiccode, L=Sanaa, C=YE'
+          "$ZIPALIGN" -P 16 -f 4 "$INPUT" "$ALIGNED"
+          "$APKSIGNER" sign --ks "$KS" --ks-key-alias mustanadati --ks-pass "pass:$PASS" --key-pass "pass:$PASS" --v2-signing-enabled true --v3-signing-enabled true --out "$FINAL" "$ALIGNED"
+          "$APKSIGNER" verify --verbose --print-certs "$FINAL" | tee build/app/outputs/flutter-apk/signing-verification.txt
+          grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' build/app/outputs/flutter-apk/signing-verification.txt
+          grep -q 'Verified using v3 scheme (APK Signature Scheme v3): true' build/app/outputs/flutter-apk/signing-verification.txt
+          "$ZIPALIGN" -c -P 16 -v 4 "$FINAL" >/dev/null
+          "$AAPT" dump badging "$FINAL" | tee build/app/outputs/flutter-apk/badging.txt
+          grep -q "package: name='com.mographiccode.mustanadati.resume'" build/app/outputs/flutter-apk/badging.txt
+          grep -q "versionName='2.6.0'" build/app/outputs/flutter-apk/badging.txt
+          grep -q "sdkVersion:'26'" build/app/outputs/flutter-apk/badging.txt
+          grep -q "native-code: 'arm64-v8a'" build/app/outputs/flutter-apk/badging.txt
+          unzip -t "$FINAL" >/dev/null
+          ! unzip -l "$FINAL" | grep -E 'lib/(x86_64|armeabi-v7a)/'
+          ! unzip -l "$FINAL" | grep 'kernel_blob.bin'
+          sha256sum "$FINAL" | tee "$FINAL.sha256"
+          ls -lh "$FINAL"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mustanadati-v2.6.0-Resume-ExcelFix-Signed-ARM64
+          path: |
+            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.6.0-Resume-ExcelFix-ARM64.apk
+            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.6.0-Resume-ExcelFix-ARM64.apk.sha256
+            docviewer_build/build/app/outputs/flutter-apk/signing-verification.txt
+            docviewer_build/build/app/outputs/flutter-apk/badging.txt
+          if-no-files-found: error
+          retention-days: 7
