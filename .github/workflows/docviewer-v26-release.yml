@@ -161,7 +161,7 @@ jobs:
           "$AAPT" dump badging "$FINAL" | tee build/app/outputs/flutter-apk/badging.txt
           grep -q "package: name='com.mographiccode.mustanadati.app'" build/app/outputs/flutter-apk/badging.txt
           grep -q "versionName='2.6.0'" build/app/outputs/flutter-apk/badging.txt
-          grep -q "versionCode='8'" build/app/outputs/flutter-apk/badging.txt
+          grep -q "versionCode='2008'" build/app/outputs/flutter-apk/badging.txt
           grep -q "native-code: 'arm64-v8a'" build/app/outputs/flutter-apk/badging.txt
           unzip -t "$FINAL" >/dev/null
           sha256sum "$FINAL" | tee "$FINAL.sha256"
