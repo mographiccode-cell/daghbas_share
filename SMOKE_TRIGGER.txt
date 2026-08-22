@@ -1,0 +1,1 @@
+Trigger exact LocalShare installer and APK smoke validation.
