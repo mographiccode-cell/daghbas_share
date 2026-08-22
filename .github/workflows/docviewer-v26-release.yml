@@ -52,23 +52,11 @@ jobs:
           p = Path(os.environ['PUB_CACHE']) / 'hosted' / 'pub.dev' / 'docx_file_viewer-1.0.3' / 'lib' / 'src' / 'docx_view.dart'
           s = p.read_text()
           if 'final ScrollController? scrollController;' not in s:
-              s = s.replace(
-                  '  final DocxSearchController? searchController;\n',
-                  '  final DocxSearchController? searchController;\n\n  final ScrollController? scrollController;\n',
-                  1,
-              )
+              s = s.replace('  final DocxSearchController? searchController;\n','  final DocxSearchController? searchController;\n\n  final ScrollController? scrollController;\n',1)
           if '    this.scrollController,\n' not in s:
-              s = s.replace(
-                  '    this.searchController,\n    this.onLoaded,\n',
-                  '    this.searchController,\n    this.scrollController,\n    this.onLoaded,\n',
-                  1,
-              )
+              s = s.replace('    this.searchController,\n    this.onLoaded,\n','    this.searchController,\n    this.scrollController,\n    this.onLoaded,\n',1)
           if 'controller: widget.scrollController,' not in s:
-              s = s.replace(
-                  '    final list = SingleChildScrollView(\n      padding: widget.config.padding,\n',
-                  '    final list = SingleChildScrollView(\n      controller: widget.scrollController,\n      padding: widget.config.padding,\n',
-                  1,
-              )
+              s = s.replace('    final list = SingleChildScrollView(\n      padding: widget.config.padding,\n','    final list = SingleChildScrollView(\n      controller: widget.scrollController,\n      padding: widget.config.padding,\n',1)
           p.write_text(s)
           assert 'final ScrollController? scrollController;' in s
           assert 'this.scrollController,' in s
@@ -177,6 +165,12 @@ jobs:
           grep -q "native-code: 'arm64-v8a'" build/app/outputs/flutter-apk/badging.txt
           unzip -t "$FINAL" >/dev/null
           sha256sum "$FINAL" | tee "$FINAL.sha256"
+          mkdir -p build/signing-tools/lib
+          cp "$APKSIGNER" build/signing-tools/apksigner
+          cp "$(dirname "$APKSIGNER")/lib/apksigner.jar" build/signing-tools/lib/apksigner.jar
+          chmod +x build/signing-tools/apksigner
+          test -s build/signing-tools/apksigner
+          test -s build/signing-tools/lib/apksigner.jar
 
       - uses: actions/upload-artifact@v4
         with:
@@ -186,5 +180,7 @@ jobs:
             docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.6.0-StablePackage-ARM64.apk.sha256
             docviewer_build/build/app/outputs/flutter-apk/signing-verification.txt
             docviewer_build/build/app/outputs/flutter-apk/badging.txt
+            docviewer_build/build/signing-tools/apksigner
+            docviewer_build/build/signing-tools/lib/apksigner.jar
           if-no-files-found: error
           retention-days: 7
