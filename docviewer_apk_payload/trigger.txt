@@ -1,1 +1,1 @@
-trigger Mustanadati v2.6.0 clean release pipeline resume Excel fix 2026-08-22
+trigger Mustanadati v2.6.0 original package id stable update line 2026-08-22
