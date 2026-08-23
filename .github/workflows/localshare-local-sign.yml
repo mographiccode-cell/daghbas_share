@@ -1,4 +1,4 @@
-name: LocalShare Local Code-Signed Package
+name: LocalShare Local Code-Signed Package V2
 
 on:
   pull_request:
@@ -12,6 +12,7 @@ jobs:
   windows:
     name: Windows locally signed package
     runs-on: windows-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -61,7 +62,7 @@ jobs:
           flutter test
           flutter build windows --release
 
-      - name: Create RSA code-signing certificate and sign all LocalShare binaries
+      - name: Create LocalShare RSA certificate and Authenticode-sign binaries
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
@@ -75,27 +76,28 @@ jobs:
             -HashAlgorithm SHA256 `
             -KeyExportPolicy NonExportable `
             -NotAfter (Get-Date).AddYears(3)
-          if (-not $cert) { throw 'Failed to create LocalShare code-signing certificate' }
+          if (-not $cert) { throw 'Failed to create LocalShare certificate' }
           Export-Certificate -Cert $cert -FilePath artifacts/LocalShare-Local-Code-Signing.cer | Out-Null
-          Import-Certificate -FilePath artifacts/LocalShare-Local-Code-Signing.cer -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
-          Import-Certificate -FilePath artifacts/LocalShare-Local-Code-Signing.cer -CertStoreLocation 'Cert:\CurrentUser\TrustedPublisher' | Out-Null
 
-          $signtool=(Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' -ErrorAction Stop | Sort-Object FullName -Descending | Select-Object -First 1).FullName
-          if (-not $signtool) { throw 'signtool.exe not found' }
           $release=(Resolve-Path 'generated/build/windows/x64/runner/Release').Path
           $targets=Get-ChildItem $release -Recurse -File | Where-Object { $_.Extension -in '.exe','.dll' }
-          if (-not $targets) { throw 'No PE binaries found to sign' }
+          if (-not $targets) { throw 'No Windows PE binaries found' }
           foreach ($target in $targets) {
-            & $signtool sign /fd SHA256 /sha1 $cert.Thumbprint $target.FullName
-            if ($LASTEXITCODE -ne 0) { throw "Signing failed: $($target.FullName)" }
+            Set-AuthenticodeSignature -FilePath $target.FullName -Certificate $cert -HashAlgorithm SHA256 | Out-Null
+            $sig=Get-AuthenticodeSignature $target.FullName
+            if (-not $sig.SignerCertificate -or $sig.SignerCertificate.Thumbprint -ne $cert.Thumbprint) {
+              throw "Authenticode signature was not embedded: $($target.FullName)"
+            }
           }
-          foreach ($target in $targets) {
-            $status=Get-AuthenticodeSignature $target.FullName
-            if ($status.Status -ne 'Valid') { throw "Invalid Authenticode signature: $($target.FullName) => $($status.Status)" }
-          }
-          $cert | Format-List Subject,Thumbprint,NotBefore,NotAfter | Out-File artifacts/LocalShare-Certificate-Info.txt -Encoding UTF8
 
-      - name: Build and sign Windows installer
+          Import-Certificate -FilePath artifacts/LocalShare-Local-Code-Signing.cer -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
+          Import-Certificate -FilePath artifacts/LocalShare-Local-Code-Signing.cer -CertStoreLocation 'Cert:\CurrentUser\TrustedPublisher' | Out-Null
+          $mainExe=Join-Path $release 'local_share.exe'
+          $mainSig=Get-AuthenticodeSignature $mainExe
+          if ($mainSig.Status -ne 'Valid') { throw "LocalShare EXE signature is not valid after local trust: $($mainSig.Status)" }
+          $cert | Format-List Subject,Issuer,Thumbprint,NotBefore,NotAfter | Out-File artifacts/LocalShare-Certificate-Info.txt -Encoding UTF8
+
+      - name: Build and Authenticode-sign installer
         shell: pwsh
         run: |
           $release=(Resolve-Path 'generated/build/windows/x64/runner/Release').Path
@@ -135,22 +137,19 @@ jobs:
           Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare UDP Discovery"""; Flags: runhidden; RunOnceId: "RemoveLocalShareUdp"
           "@
           Set-Content installer.iss $iss -Encoding UTF8
-          $iscc='C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
-          & $iscc installer.iss
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' installer.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $cert=Get-ChildItem 'Cert:\CurrentUser\My' | Where-Object { $_.Subject -like '*MographicCode LocalShare*' } | Sort-Object NotBefore -Descending | Select-Object -First 1
-          if (-not $cert) { throw 'Signing certificate missing' }
-          $signtool=(Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' | Sort-Object FullName -Descending | Select-Object -First 1).FullName
+          if (-not $cert) { throw 'LocalShare certificate missing' }
           $setup=(Resolve-Path 'artifacts/LocalShare-1.2-Windows-Setup-LocalSigned.exe').Path
-          & $signtool sign /fd SHA256 /sha1 $cert.Thumbprint $setup
-          if ($LASTEXITCODE -ne 0) { throw 'Installer signing failed' }
-          $signature=Get-AuthenticodeSignature $setup
-          if ($signature.Status -ne 'Valid') { throw "Installer signature invalid: $($signature.Status)" }
-          if ($signature.SignerCertificate.Subject -notlike '*MographicCode LocalShare*') { throw 'Unexpected installer signer' }
+          Set-AuthenticodeSignature -FilePath $setup -Certificate $cert -HashAlgorithm SHA256 | Out-Null
+          $sig=Get-AuthenticodeSignature $setup
+          if ($sig.Status -ne 'Valid') { throw "Installer Authenticode status: $($sig.Status)" }
+          if ($sig.SignerCertificate.Subject -notlike '*MographicCode LocalShare*') { throw 'Unexpected installer signer' }
           Get-FileHash $setup -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  LocalShare-1.2-Windows-Setup-LocalSigned.exe" } | Set-Content artifacts/LocalShare-1.2-Windows-Setup-LocalSigned.exe.sha256
 
-      - name: Create local trust installer helper and instructions
+      - name: Create trust helper and ZIP
         shell: pwsh
         run: |
           @'
@@ -161,27 +160,28 @@ jobs:
             powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
             exit /b
           )
-          echo Installing LocalShare public code-signing certificate...
+          echo Installing the LocalShare public code-signing certificate...
           certutil -addstore -f Root "%~dp0LocalShare-Local-Code-Signing.cer" || exit /b 1
           certutil -addstore -f TrustedPublisher "%~dp0LocalShare-Local-Code-Signing.cer" || exit /b 1
-          echo Certificate installed. Starting signed LocalShare installer...
+          echo LocalShare certificate trusted on this PC.
           start "" "%~dp0LocalShare-1.2-Windows-Setup-LocalSigned.exe"
           endlocal
           '@ | Set-Content artifacts/1-TRUST-AND-INSTALL-LOCALSHARE.cmd -Encoding ASCII
 
           @'
-          LocalShare 1.2 - Local Code-Signed Package
+          LOCALSHARE 1.2 - LOCAL RSA CODE-SIGNED PACKAGE
 
-          This package uses an RSA SHA-256 code-signing certificate with publisher:
-          MographicCode LocalShare
+          Publisher embedded in the EXE signature: MographicCode LocalShare
+          Signature: Authenticode / RSA 3072 / SHA-256
 
-          For THIS Windows PC:
-          1. Extract the ZIP completely.
-          2. Right-click 1-TRUST-AND-INSTALL-LOCALSHARE.cmd and choose Run as administrator.
-          3. Approve the UAC prompt. The helper adds ONLY the included LocalShare public certificate to the local Windows trust stores, then opens the signed installer.
-          4. You can inspect the certificate first by double-clicking LocalShare-Local-Code-Signing.cer.
+          INSTALL ON THIS PC:
+          1) Extract this ZIP completely.
+          2) Right-click 1-TRUST-AND-INSTALL-LOCALSHARE.cmd and choose Run as administrator.
+          3) Accept the UAC prompt. It installs ONLY the included LocalShare public certificate into this PC's Root and TrustedPublisher stores, then starts the signed installer.
+          4) You can inspect LocalShare-Local-Code-Signing.cer before trusting it.
 
-          This is a LOCAL/DEVELOPMENT trust certificate, not a publicly trusted CA certificate. It does not disable Windows Defender, SmartScreen, or Smart App Control. On Windows 11 systems where Smart App Control is enforcing CA-only trust, a Microsoft Trusted Root Program certificate or Microsoft Store distribution is still required.
+          This does NOT disable Windows Defender, SmartScreen, or Smart App Control.
+          The certificate is local/development trust, not a public CA certificate.
           '@ | Set-Content artifacts/README-FIRST.txt -Encoding UTF8
 
           Compress-Archive -Path artifacts/LocalShare-1.2-Windows-Setup-LocalSigned.exe,artifacts/LocalShare-Local-Code-Signing.cer,artifacts/LocalShare-Certificate-Info.txt,artifacts/LocalShare-1.2-Windows-Setup-LocalSigned.exe.sha256,artifacts/1-TRUST-AND-INSTALL-LOCALSHARE.cmd,artifacts/README-FIRST.txt -DestinationPath artifacts/LocalShare-1.2-Windows-LocalSigned-Package.zip -Force
@@ -190,17 +190,15 @@ jobs:
         shell: pwsh
         run: |
           $setup=(Resolve-Path 'artifacts/LocalShare-1.2-Windows-Setup-LocalSigned.exe').Path
-          $sig=Get-AuthenticodeSignature $setup
-          if ($sig.Status -ne 'Valid') { throw 'Installer is not locally trusted in CI' }
+          if ((Get-AuthenticodeSignature $setup).Status -ne 'Valid') { throw 'Installer signature invalid in trusted test environment' }
           $install=Start-Process $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Installer failed: $($install.ExitCode)" }
           $exe='C:\Program Files\LocalShare\local_share.exe'
           if (-not (Test-Path $exe)) { throw 'Installed LocalShare executable missing' }
-          $appSig=Get-AuthenticodeSignature $exe
-          if ($appSig.Status -ne 'Valid') { throw "Installed LocalShare signature invalid: $($appSig.Status)" }
+          if ((Get-AuthenticodeSignature $exe).Status -ne 'Valid') { throw 'Installed LocalShare signature invalid' }
           $proc=Start-Process $exe -PassThru
           Start-Sleep 6
-          if ($proc.HasExited) { throw 'Signed LocalShare exited unexpectedly' }
+          if ($proc.HasExited) { throw 'LocalShare exited unexpectedly' }
           $proc.CloseMainWindow() | Out-Null
           if (-not $proc.WaitForExit(10000)) { Stop-Process -Id $proc.Id -Force }
           $uninstaller='C:\Program Files\LocalShare\unins000.exe'
@@ -209,6 +207,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: LocalShare-1.2-Windows-LocalSigned-Package
+          name: LocalShare-1.2-Windows-LocalSigned-Package-V2
           path: artifacts/LocalShare-1.2-Windows-LocalSigned-Package.zip
           if-no-files-found: error
