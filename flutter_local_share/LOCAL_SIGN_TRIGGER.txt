@@ -1,0 +1,1 @@
+Trigger LocalShare 1.2 local RSA code-signed Windows package validation.
