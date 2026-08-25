@@ -1,4 +1,4 @@
-name: LocalShare osslsigncode Signing
+name: LocalShare OpenSSL Authenticode Signing
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   windows:
-    name: Windows osslsigncode signed installer
+    name: Windows OpenSSL signed installer
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -60,56 +60,70 @@ jobs:
           flutter test
           flutter build windows --release
 
-      - name: Prepare LocalShare certificate and osslsigncode
+      - name: Generate RSA code-signing certificate with OpenSSL
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force artifacts,signing-tools | Out-Null
-          $pfxPassword='LocalShare-CI-2026-Temp!'
-          $rsa=[System.Security.Cryptography.RSA]::Create(3072)
-          $dn=[System.Security.Cryptography.X509Certificates.X500DistinguishedName]::new('CN=MographicCode LocalShare, O=MographicCode')
-          $req=[System.Security.Cryptography.X509Certificates.CertificateRequest]::new($dn,$rsa,[System.Security.Cryptography.HashAlgorithmName]::SHA256,[System.Security.Cryptography.RSASignaturePadding]::Pkcs1)
-          $oids=[System.Security.Cryptography.OidCollection]::new()
-          [void]$oids.Add([System.Security.Cryptography.Oid]::new('1.3.6.1.5.5.7.3.3','Code Signing'))
-          $req.CertificateExtensions.Add([System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]::new($oids,$false))
-          $req.CertificateExtensions.Add([System.Security.Cryptography.X509Certificates.X509BasicConstraintsExtension]::new($false,$false,0,$true))
-          $req.CertificateExtensions.Add([System.Security.Cryptography.X509Certificates.X509KeyUsageExtension]::new([System.Security.Cryptography.X509Certificates.X509KeyUsageFlags]::DigitalSignature,$true))
-          $cert=$req.CreateSelfSigned((Get-Date).AddDays(-1),(Get-Date).AddYears(3))
-          [System.IO.File]::WriteAllBytes((Join-Path $PWD 'artifacts/LocalShare-Code-Signing.pfx'),$cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx,$pfxPassword))
-          [System.IO.File]::WriteAllBytes((Join-Path $PWD 'artifacts/LocalShare-Code-Signing.cer'),$cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
-          Import-Certificate -FilePath artifacts/LocalShare-Code-Signing.cer -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
-          Import-Certificate -FilePath artifacts/LocalShare-Code-Signing.cer -CertStoreLocation 'Cert:\CurrentUser\TrustedPublisher' | Out-Null
-          $cert | Format-List Subject,Issuer,Thumbprint,NotBefore,NotAfter | Out-File artifacts/LocalShare-Certificate-Info.txt -Encoding UTF8
-          Write-Host "CERT_READY $($cert.Thumbprint)"
+          $openssl='C:\Program Files\Git\usr\bin\openssl.exe'
+          if (-not (Test-Path $openssl)) { $openssl=(Get-Command openssl.exe -ErrorAction Stop).Source }
+          & $openssl version
+          if ($LASTEXITCODE -ne 0) { throw 'OpenSSL unavailable' }
+          @'
+          [ req ]
+          distinguished_name = dn
+          x509_extensions = ext
+          prompt = no
+          [ dn ]
+          CN = MographicCode LocalShare
+          O = MographicCode
+          [ ext ]
+          basicConstraints = critical,CA:FALSE
+          keyUsage = critical,digitalSignature
+          extendedKeyUsage = codeSigning
+          subjectKeyIdentifier = hash
+          authorityKeyIdentifier = keyid,issuer
+          '@ | Set-Content signing-tools/localshare-openssl.cnf -Encoding ASCII
+          & $openssl req -x509 -newkey rsa:3072 -sha256 -days 1095 -nodes -keyout signing-tools/localshare-key.pem -out signing-tools/localshare-cert.pem -config signing-tools/localshare-openssl.cnf
+          if ($LASTEXITCODE -ne 0) { throw 'OpenSSL certificate generation failed' }
+          & $openssl x509 -in signing-tools/localshare-cert.pem -outform DER -out artifacts/LocalShare-Code-Signing.cer
+          if ($LASTEXITCODE -ne 0) { throw 'CER export failed' }
+          & $openssl x509 -in signing-tools/localshare-cert.pem -noout -subject -issuer -fingerprint -sha256 | Tee-Object -FilePath artifacts/LocalShare-Certificate-Info.txt
+          if (-not (Test-Path artifacts/LocalShare-Code-Signing.cer)) { throw 'Certificate output missing' }
+          Write-Host 'OPENSSL_CERT_READY'
 
+      - name: Download verified osslsigncode 2.14
+        shell: pwsh
+        run: |
           $url='https://github.com/mtrojnar/osslsigncode/releases/download/2.14/osslsigncode-2.14-windows-x64-mingw.zip'
           $zip='signing-tools/osslsigncode.zip'
-          Invoke-WebRequest -Uri $url -OutFile $zip
+          & curl.exe -L --fail --retry 3 --connect-timeout 15 --max-time 120 $url -o $zip
+          if ($LASTEXITCODE -ne 0) { throw 'osslsigncode download failed' }
           $hash=(Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
           if ($hash -ne '9a1722aaf62a27852c4eb9c35749a0248065052d0ae0a93d4ed6bb49def027f2') { throw "Unexpected osslsigncode archive hash: $hash" }
           Expand-Archive $zip -DestinationPath signing-tools/osslsigncode -Force
           $ossl=(Get-ChildItem signing-tools/osslsigncode -Recurse -Filter osslsigncode.exe | Select-Object -First 1).FullName
-          if (-not $ossl) { throw 'osslsigncode.exe not found after extraction' }
+          if (-not $ossl) { throw 'osslsigncode.exe missing' }
           & $ossl --version
-          if ($LASTEXITCODE -ne 0) { throw 'osslsigncode failed to execute' }
+          if ($LASTEXITCODE -ne 0) { throw 'osslsigncode cannot execute' }
           Set-Content artifacts/osslsigncode-path.txt $ossl -Encoding ASCII
+          Write-Host "OSSLSIGNCODE_READY $hash"
 
       - name: Authenticode sign LocalShare EXE
         shell: pwsh
         run: |
-          $pfxPassword='LocalShare-CI-2026-Temp!'
-          $pfx=(Resolve-Path 'artifacts/LocalShare-Code-Signing.pfx').Path
-          $ossl=Get-Content artifacts/osslsigncode-path.txt -Raw
-          $ossl=$ossl.Trim()
+          $ossl=(Get-Content artifacts/osslsigncode-path.txt -Raw).Trim()
+          $cert=(Resolve-Path 'signing-tools/localshare-cert.pem').Path
+          $key=(Resolve-Path 'signing-tools/localshare-key.pem').Path
           $exe=(Resolve-Path 'generated/build/windows/x64/runner/Release/local_share.exe').Path
           $signed="$exe.signed.exe"
           Write-Host 'SIGN_EXE_START'
-          & $ossl sign -pkcs12 $pfx -pass $pfxPassword -n 'LocalShare' -i 'https://github.com/mographiccode-cell/daghbas_share' -h sha256 -in $exe -out $signed
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $signed)) { throw 'osslsigncode failed to sign local_share.exe' }
+          & $ossl sign -certs $cert -key $key -n 'LocalShare' -i 'https://github.com/mographiccode-cell/daghbas_share' -h sha256 -in $exe -out $signed
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $signed)) { throw 'Signing local_share.exe failed' }
           Move-Item $signed $exe -Force
           $sig=Get-AuthenticodeSignature $exe
-          if ($sig.Status -ne 'Valid') { throw "local_share.exe Authenticode status: $($sig.Status)" }
+          if (-not $sig.SignerCertificate) { throw 'No Authenticode signer embedded in local_share.exe' }
           if ($sig.SignerCertificate.Subject -notlike '*MographicCode LocalShare*') { throw 'Unexpected local_share.exe signer' }
-          Write-Host "SIGN_EXE_DONE $($sig.SignerCertificate.Thumbprint)"
+          Write-Host "SIGN_EXE_EMBEDDED status=$($sig.Status) thumbprint=$($sig.SignerCertificate.Thumbprint)"
 
       - name: Build and Authenticode sign installer
         shell: pwsh
@@ -153,22 +167,36 @@ jobs:
           Set-Content installer.iss $iss -Encoding UTF8
           & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' installer.iss
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup failed' }
-
-          $pfxPassword='LocalShare-CI-2026-Temp!'
-          $pfx=(Resolve-Path 'artifacts/LocalShare-Code-Signing.pfx').Path
           $ossl=(Get-Content artifacts/osslsigncode-path.txt -Raw).Trim()
+          $cert=(Resolve-Path 'signing-tools/localshare-cert.pem').Path
+          $key=(Resolve-Path 'signing-tools/localshare-key.pem').Path
           $unsigned=(Resolve-Path 'artifacts/LocalShare-1.2-Windows-Setup-Unsigned.exe').Path
           $signed=(Join-Path $PWD 'artifacts/LocalShare-1.2-Windows-Setup-Signed.exe')
           Write-Host 'SIGN_INSTALLER_START'
-          & $ossl sign -pkcs12 $pfx -pass $pfxPassword -n 'LocalShare 1.2 Installer' -i 'https://github.com/mographiccode-cell/daghbas_share' -h sha256 -in $unsigned -out $signed
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $signed)) { throw 'osslsigncode failed to sign installer' }
+          & $ossl sign -certs $cert -key $key -n 'LocalShare 1.2 Installer' -i 'https://github.com/mographiccode-cell/daghbas_share' -h sha256 -in $unsigned -out $signed
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $signed)) { throw 'Signing installer failed' }
           Remove-Item $unsigned -Force
           $sig=Get-AuthenticodeSignature $signed
-          if ($sig.Status -ne 'Valid') { throw "Installer Authenticode status: $($sig.Status)" }
+          if (-not $sig.SignerCertificate) { throw 'No Authenticode signer embedded in installer' }
           if ($sig.SignerCertificate.Subject -notlike '*MographicCode LocalShare*') { throw 'Unexpected installer signer' }
-          Write-Host "SIGN_INSTALLER_DONE $($sig.SignerCertificate.Thumbprint)"
+          Write-Host "SIGN_INSTALLER_EMBEDDED status=$($sig.Status) thumbprint=$($sig.SignerCertificate.Thumbprint)"
           Get-FileHash $signed -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  LocalShare-1.2-Windows-Setup-Signed.exe" } | Set-Content artifacts/LocalShare-1.2-Windows-Setup-Signed.exe.sha256
-          Remove-Item artifacts/LocalShare-Code-Signing.pfx -Force
+          Remove-Item signing-tools/localshare-key.pem -Force
+
+      - name: Trust certificate and require Valid Authenticode
+        shell: pwsh
+        run: |
+          & certutil.exe -user -addstore -f Root artifacts/LocalShare-Code-Signing.cer
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to trust LocalShare root certificate' }
+          & certutil.exe -user -addstore -f TrustedPublisher artifacts/LocalShare-Code-Signing.cer
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to trust LocalShare publisher certificate' }
+          $exe=(Resolve-Path 'generated/build/windows/x64/runner/Release/local_share.exe').Path
+          $setup=(Resolve-Path 'artifacts/LocalShare-1.2-Windows-Setup-Signed.exe').Path
+          $appSig=Get-AuthenticodeSignature $exe
+          $setupSig=Get-AuthenticodeSignature $setup
+          if ($appSig.Status -ne 'Valid') { throw "local_share.exe status after trust: $($appSig.Status)" }
+          if ($setupSig.Status -ne 'Valid') { throw "installer status after trust: $($setupSig.Status)" }
+          Write-Host 'AUTHENTICODE_VALID_AFTER_TRUST'
 
       - name: Create trust helper ZIP
         shell: pwsh
@@ -193,25 +221,22 @@ jobs:
           LocalShare 1.2 - Authenticode signed local package
 
           Extract the ZIP completely, then run 1-TRUST-AND-INSTALL.cmd as Administrator.
-          It adds ONLY the included public MographicCode LocalShare certificate to Windows Root and TrustedPublisher stores, then opens the installer signed by that certificate.
+          It installs ONLY the included public MographicCode LocalShare certificate into Windows Root and TrustedPublisher stores, then opens the installer signed by that exact certificate.
 
-          This is a locally/self-issued certificate. It establishes explicit trust on the PC where the CER is installed, but it is not a globally trusted commercial CA certificate. It does not disable Defender, SmartScreen, or Smart App Control. CA-only enterprise/Smart App Control policy can still require a public CA or Microsoft signing service.
+          This is a locally/self-issued code-signing certificate, not a globally trusted commercial CA certificate. It creates explicit trust on this PC without disabling Defender, SmartScreen, or Smart App Control. A Windows policy that only accepts public CA/Microsoft-signed software can still require a commercial/Microsoft signing identity.
           '@ | Set-Content artifacts/README-FIRST.txt -Encoding UTF8
-
           Compress-Archive -Path artifacts/LocalShare-1.2-Windows-Setup-Signed.exe,artifacts/LocalShare-Code-Signing.cer,artifacts/LocalShare-Certificate-Info.txt,artifacts/LocalShare-1.2-Windows-Setup-Signed.exe.sha256,artifacts/1-TRUST-AND-INSTALL.cmd,artifacts/README-FIRST.txt -DestinationPath artifacts/LocalShare-1.2-Windows-Signed-Package.zip -Force
 
       - name: Verify install run uninstall
         shell: pwsh
         run: |
           $setup=(Resolve-Path 'artifacts/LocalShare-1.2-Windows-Setup-Signed.exe').Path
-          $sig=Get-AuthenticodeSignature $setup
-          if ($sig.Status -ne 'Valid') { throw "Installer not trusted in CI: $($sig.Status)" }
+          if ((Get-AuthenticodeSignature $setup).Status -ne 'Valid') { throw 'Installer not trusted before install' }
           $install=Start-Process $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Installer failed: $($install.ExitCode)" }
           $exe='C:\Program Files\LocalShare\local_share.exe'
           if (-not (Test-Path $exe)) { throw 'Installed LocalShare executable missing' }
-          $appSig=Get-AuthenticodeSignature $exe
-          if ($appSig.Status -ne 'Valid') { throw "Installed EXE Authenticode status: $($appSig.Status)" }
+          if ((Get-AuthenticodeSignature $exe).Status -ne 'Valid') { throw 'Installed LocalShare EXE signature is not Valid' }
           $proc=Start-Process $exe -PassThru
           Start-Sleep 6
           if ($proc.HasExited) { throw 'LocalShare exited unexpectedly' }
