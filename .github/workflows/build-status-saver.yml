@@ -37,70 +37,36 @@ jobs:
           flutter create --platforms=android --org=com.mographiccode --project-name=status_saver build_status_saver
           rm -f build_status_saver/test/widget_test.dart
 
-      - name: Apply Status Saver source
+      - name: Apply Status Saver source and exact icon
         run: |
           cp status_saver_ci/lib/main.dart build_status_saver/lib/main.dart
           cp status_saver_ci/test/status_item_test.dart build_status_saver/test/status_item_test.dart
           cp status_saver_ci/android/MainActivity.kt build_status_saver/android/app/src/main/kotlin/com/mographiccode/status_saver/MainActivity.kt
           cp status_saver_ci/android/AndroidManifest.xml build_status_saver/android/app/src/main/AndroidManifest.xml
+          mkdir -p build_status_saver/assets
+          cp status_saver_ci/assets/app_icon.png build_status_saver/assets/app_icon.png
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('build_status_saver/lib/main.dart')
+          p = Path('build_status_saver/pubspec.yaml')
           text = p.read_text()
-          old = "child: Image.asset('assets/app_icon.png', fit: BoxFit.cover),"
-          new = "child: const ColoredBox(color: _brand, child: Stack(alignment: Alignment.center, children: [Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 78), Icon(Icons.download_rounded, color: _brand, size: 42)])),"
-          if old not in text:
-              raise SystemExit('App icon asset expression not found')
-          p.write_text(text.replace(old, new, 1))
+          needle = '  uses-material-design: true\n'
+          if needle not in text:
+              raise SystemExit('uses-material-design entry not found')
+          if 'assets/app_icon.png' not in text:
+              text = text.replace(needle, needle + '  assets:\n    - assets/app_icon.png\n', 1)
+          p.write_text(text)
           PY
 
-      - name: Create native Android adaptive launcher icon
+      - name: Install exact raster launcher icon
         run: |
           rm -f build_status_saver/android/app/src/main/res/mipmap-*/ic_launcher*.png
           rm -f build_status_saver/android/app/src/main/res/mipmap-*/ic_launcher*.webp
           rm -f build_status_saver/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher*.xml
-          mkdir -p build_status_saver/android/app/src/main/res/drawable
-          mkdir -p build_status_saver/android/app/src/main/res/values
-          mkdir -p build_status_saver/android/app/src/main/res/mipmap-anydpi-v26
-          cat > build_status_saver/android/app/src/main/res/values/status_saver_colors.xml <<'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="status_saver_icon_bg">#08B96F</color>
-          </resources>
-          XML
-          cat > build_status_saver/android/app/src/main/res/drawable/status_saver_icon_foreground.xml <<'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp"
-              android:height="108dp"
-              android:viewportWidth="108"
-              android:viewportHeight="108">
-              <path
-                  android:fillColor="#FFFFFFFF"
-                  android:pathData="M54,13 C76.64,13 95,31.36 95,54 C95,76.64 76.64,95 54,95 C31.36,95 13,76.64 13,54 C13,31.36 31.36,13 54,13 Z" />
-              <path
-                  android:fillColor="#FFFFFFFF"
-                  android:pathData="M30,78 L20,94 L42,84 Z" />
-              <path
-                  android:fillColor="#FF07965B"
-                  android:pathData="M50,32 L58,32 L58,56 L69,56 L54,71 L39,56 L50,56 Z" />
-              <path
-                  android:fillColor="#00000000"
-                  android:strokeColor="#FF07965B"
-                  android:strokeWidth="5"
-                  android:strokeLineCap="round"
-                  android:strokeLineJoin="round"
-                  android:pathData="M38,72 L38,77 C38,83 42,87 48,87 L60,87 C66,87 70,83 70,77 L70,72" />
-          </vector>
-          XML
-          cat > build_status_saver/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-              <background android:drawable="@color/status_saver_icon_bg" />
-              <foreground android:drawable="@drawable/status_saver_icon_foreground" />
-          </adaptive-icon>
-          XML
-          cp build_status_saver/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml build_status_saver/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          mkdir -p build_status_saver/android/app/src/main/res/mipmap-xxxhdpi
+          cp status_saver_ci/assets/app_icon.png build_status_saver/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          cp status_saver_ci/assets/app_icon.png build_status_saver/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+          test -s build_status_saver/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          cmp status_saver_ci/assets/app_icon.png build_status_saver/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
       - name: Secure Android minimum SDK
         run: |
@@ -159,7 +125,8 @@ jobs:
           grep -q "package: name='com.mographiccode.status_saver'" "$RUNNER_TEMP/badging.txt"
           grep -q "sdkVersion:'29'" "$RUNNER_TEMP/badging.txt"
           grep -q "application-label:'حافظ الحالات'" "$RUNNER_TEMP/badging.txt"
-          grep -Eq "application: label='حافظ الحالات' icon='res/.+'" "$RUNNER_TEMP/badging.txt"
+          grep -Eq "application: label='حافظ الحالات' icon='res/.+\.png'" "$RUNNER_TEMP/badging.txt"
+          grep -Eq "application-icon-[0-9]+:'res/.+\.png'" "$RUNNER_TEMP/badging.txt"
           ! grep -Eq 'MANAGE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_CONTACTS|READ_SMS|CAMERA|RECORD_AUDIO|ACCESS_FINE_LOCATION|ACCESS_COARSE_LOCATION|QUERY_ALL_PACKAGES|android.permission.INTERNET' "$RUNNER_TEMP/permissions.txt"
 
       - name: Create temporary release signing key
@@ -203,7 +170,7 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: StatusSaver-v1.1.0-Signed-APK
+          name: StatusSaver-v1.1.0-ExactIcon-Signed-APK
           path: build_status_saver/build/app/outputs/flutter-apk/StatusSaver-v1.1.0.apk
           if-no-files-found: error
           retention-days: 7
