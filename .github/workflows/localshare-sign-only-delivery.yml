@@ -1,0 +1,76 @@
+name: LocalShare Signed Delivery Only
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  sign:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: LocalShare-Windows-Final-StrictCleanup
+          path: unsigned
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 32587475264
+
+      - name: Sign LocalShare installer and export certificate
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          $cert=New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=MographicCode LocalShare' -FriendlyName 'MographicCode LocalShare Code Signing' -CertStoreLocation 'Cert:\CurrentUser\My' -KeyAlgorithm RSA -KeyLength 3072 -HashAlgorithm SHA256 -KeyExportPolicy NonExportable -NotAfter (Get-Date).AddYears(3)
+          if (-not $cert) { throw 'Certificate creation failed' }
+          Export-Certificate -Cert $cert -FilePath out/LocalShare-Code-Signing.cer | Out-Null
+          $src=(Resolve-Path 'unsigned/LocalShare-Windows-Setup.exe').Path
+          $dst=(Join-Path $PWD 'out/LocalShare-1.2-Windows-Setup-Signed.exe')
+          Copy-Item $src $dst -Force
+          $result=Set-AuthenticodeSignature -FilePath $dst -Certificate $cert -HashAlgorithm SHA256
+          if (-not $result.SignerCertificate) { throw 'Signature missing' }
+          if ($result.SignerCertificate.Thumbprint -ne $cert.Thumbprint) { throw 'Signer mismatch' }
+          $cert | Format-List Subject,Issuer,Thumbprint,NotBefore,NotAfter | Out-File out/LocalShare-Certificate-Info.txt -Encoding UTF8
+          Get-FileHash $dst -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  LocalShare-1.2-Windows-Setup-Signed.exe" } | Set-Content out/LocalShare-1.2-Windows-Setup-Signed.exe.sha256 -Encoding ASCII
+
+      - name: Package signed installer and trust helper
+        shell: pwsh
+        run: |
+          @'
+          @echo off
+          setlocal
+          net session >nul 2>&1
+          if not %errorlevel%==0 (
+            powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+            exit /b
+          )
+          certutil -addstore -f Root "%~dp0LocalShare-Code-Signing.cer" || exit /b 1
+          certutil -addstore -f TrustedPublisher "%~dp0LocalShare-Code-Signing.cer" || exit /b 1
+          start "" "%~dp0LocalShare-1.2-Windows-Setup-Signed.exe"
+          endlocal
+          '@ | Set-Content out/1-TRUST-AND-INSTALL.cmd -Encoding ASCII
+          @'
+          LocalShare 1.2 signed Windows package
+          Certificate subject: MographicCode LocalShare
+          Authenticode: RSA 3072 / SHA-256
+
+          Extract the ZIP. Right-click 1-TRUST-AND-INSTALL.cmd and choose Run as administrator.
+          It installs only the included LocalShare public certificate to Root and TrustedPublisher, then starts the signed installer.
+          '@ | Set-Content out/README-FIRST.txt -Encoding UTF8
+          Compress-Archive -Path out/LocalShare-1.2-Windows-Setup-Signed.exe,out/LocalShare-Code-Signing.cer,out/LocalShare-Certificate-Info.txt,out/LocalShare-1.2-Windows-Setup-Signed.exe.sha256,out/1-TRUST-AND-INSTALL.cmd,out/README-FIRST.txt -DestinationPath out/LocalShare-1.2-Windows-Signed-Package.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LocalShare-Signed-Immediate-Delivery
+          path: |
+            out/LocalShare-1.2-Windows-Setup-Signed.exe
+            out/LocalShare-Code-Signing.cer
+            out/LocalShare-Certificate-Info.txt
+            out/LocalShare-1.2-Windows-Setup-Signed.exe.sha256
+            out/1-TRUST-AND-INSTALL.cmd
+            out/README-FIRST.txt
+            out/LocalShare-1.2-Windows-Signed-Package.zip
+          if-no-files-found: error
