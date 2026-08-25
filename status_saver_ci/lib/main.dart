@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -388,7 +387,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
     super.initState();
     (widget.item.isVideo ? widget.service.thumbnail(widget.item) : widget.service.bytes(widget.item))
         .then((v) {
-      if (mounted) setState(() { data = v; loading = false; });
+      if (mounted) {
+        setState(() { data = v; loading = false; });
+      }
     });
   }
 
