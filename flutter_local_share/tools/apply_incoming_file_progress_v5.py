@@ -1,7 +1,9 @@
 from pathlib import Path
 
-path = Path(__file__).resolve().parents[1] / 'lib' / 'chat_local_share_service.dart'
-text = path.read_text(encoding='utf-8')
+root = Path(__file__).resolve().parents[1]
+service_path = root / 'lib' / 'chat_local_share_service.dart'
+main_path = root / 'lib' / 'main.dart'
+text = service_path.read_text(encoding='utf-8')
 
 old = """    _transfers.add(transfer);
     _trimTransfers();
@@ -87,6 +89,31 @@ new = """      transfer.status = TransferStatus.failed;
 if old not in text:
     raise SystemExit('incoming transfer failure marker not found')
 text = text.replace(old, new, 1)
+service_path.write_text(text, encoding='utf-8')
 
-path.write_text(text, encoding='utf-8')
+main = main_path.read_text(encoding='utf-8')
+old = """          Text(
+            'فشل الإرسال • اضغط إعادة المحاولة',
+            style: const TextStyle(
+              color: Color(0xFFC62828),
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+"""
+new = """          Text(
+            message.isIncoming
+                ? 'فشل استلام الملف'
+                : 'فشل الإرسال • اضغط إعادة المحاولة',
+            style: const TextStyle(
+              color: Color(0xFFC62828),
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+"""
+if old not in main:
+    raise SystemExit('file failure UI marker not found')
+main = main.replace(old, new, 1)
+main_path.write_text(main, encoding='utf-8')
 print('Applied incoming file timeline progress patch')
