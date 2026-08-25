@@ -6,6 +6,8 @@ enum ChatMessageKind { text, link, file, system }
 
 enum ChatMessageDirection { send, receive }
 
+enum ChatDeliveryStatus { sending, delivered, failed }
+
 class DiscoveredDevice {
   const DiscoveredDevice({
     required this.deviceId,
@@ -21,12 +23,7 @@ class DiscoveredDevice {
   final int port;
   final DateTime lastSeen;
 
-  DiscoveredDevice copyWith({
-    String? name,
-    String? ip,
-    int? port,
-    DateTime? lastSeen,
-  }) {
+  DiscoveredDevice copyWith({String? name, String? ip, int? port, DateTime? lastSeen}) {
     return DiscoveredDevice(
       deviceId: deviceId,
       name: name ?? this.name,
@@ -52,12 +49,7 @@ class Peer {
   final int port;
   final String sharedKey;
 
-  Peer copyWith({
-    String? name,
-    String? ip,
-    int? port,
-    String? sharedKey,
-  }) {
+  Peer copyWith({String? name, String? ip, int? port, String? sharedKey}) {
     return Peer(
       deviceId: deviceId,
       name: name ?? this.name,
@@ -124,8 +116,11 @@ class ChatMessage {
     this.fileName,
     this.fileSize,
     this.localPath,
+    this.transferId,
     this.temporary = false,
     this.savedPermanently = false,
+    this.deliveryStatus = ChatDeliveryStatus.delivered,
+    this.error,
   });
 
   final String id;
@@ -138,12 +133,17 @@ class ChatMessage {
   final String? fileName;
   final int? fileSize;
   String? localPath;
+  String? transferId;
   bool temporary;
   bool savedPermanently;
+  ChatDeliveryStatus deliveryStatus;
+  String? error;
 
   bool get isIncoming => direction == ChatMessageDirection.receive;
+  bool get isMine => direction == ChatMessageDirection.send;
   bool get isFile => kind == ChatMessageKind.file;
   bool get canOpenFile => isFile && localPath != null && localPath!.isNotEmpty;
+  bool get canRetry => isMine && deliveryStatus == ChatDeliveryStatus.failed;
 }
 
 ChatMessageKind classifyChatText(String value) {
@@ -162,19 +162,12 @@ String safeFileName(String raw) {
   name = name.replaceAll(RegExp(r'[\x00-\x1F\x7F<>:"|?*]'), '_');
   name = name.replaceFirst(RegExp(r'[. ]+$'), '');
 
-  if (name.isEmpty || name == '.' || name == '..') {
-    return 'received_file';
-  }
+  if (name.isEmpty || name == '.' || name == '..') return 'received_file';
 
   final dot = name.lastIndexOf('.');
   final stem = (dot > 0 ? name.substring(0, dot) : name).trim();
-  final reserved = RegExp(
-    r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$',
-    caseSensitive: false,
-  );
-  if (reserved.hasMatch(stem)) {
-    name = '_$name';
-  }
+  final reserved = RegExp(r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$', caseSensitive: false);
+  if (reserved.hasMatch(stem)) name = '_$name';
 
   if (name.length > 180) {
     final extensionIndex = name.lastIndexOf('.');
