@@ -63,7 +63,11 @@ void main() {
       timestamp: 1700000000000,
       nonceId: nonce,
       purpose: 'message',
-      payload: const {'id': 'message_12345678', 'kind': 'link', 'text': 'https://example.com'},
+      payload: const {
+        'id': 'message_12345678',
+        'kind': 'link',
+        'text': 'https://example.com',
+      },
     );
 
     await expectLater(
