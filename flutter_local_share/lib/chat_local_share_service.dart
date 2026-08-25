@@ -721,6 +721,23 @@ class LocalShareService extends ChangeNotifier {
     );
     _transfers.add(transfer);
     _trimTransfers();
+    final incomingMessage = ChatMessage(
+      id: _randomToken(16),
+      peerId: peer.deviceId,
+      peerName: peer.name,
+      kind: ChatMessageKind.file,
+      direction: ChatMessageDirection.receive,
+      sentAt: DateTime.now(),
+      fileName: fileName,
+      fileSize: total,
+      localPath: destination.path,
+      transferId: transfer.id,
+      temporary: Platform.isWindows,
+      savedPermanently: false,
+      deliveryStatus: ChatDeliveryStatus.sending,
+    );
+    _messages.add(incomingMessage);
+    _trimMessageHistory(peer.deviceId);
     notifyListeners();
 
     IOSink? sink;
@@ -802,22 +819,11 @@ class LocalShareService extends ChangeNotifier {
       transfer.localPath = finalLocation;
       transfer.progress = 1;
       transfer.status = TransferStatus.completed;
-      _messages.add(
-        ChatMessage(
-          id: _randomToken(12),
-          peerId: peer.deviceId,
-          peerName: peer.name,
-          kind: ChatMessageKind.file,
-          direction: ChatMessageDirection.receive,
-          sentAt: DateTime.now(),
-          fileName: fileName,
-          fileSize: total,
-          localPath: finalLocation,
-          temporary: temporary,
-          savedPermanently: permanent,
-        ),
-      );
-      _trimMessageHistory(peer.deviceId);
+      incomingMessage.localPath = finalLocation;
+      incomingMessage.temporary = temporary;
+      incomingMessage.savedPermanently = permanent;
+      incomingMessage.deliveryStatus = ChatDeliveryStatus.delivered;
+      incomingMessage.error = null;
       notifyListeners();
 
       final ack = await _crypto.macString(
@@ -838,6 +844,11 @@ class LocalShareService extends ChangeNotifier {
       } catch (_) {}
       transfer.status = TransferStatus.failed;
       transfer.error = 'فشل التحقق أو الحفظ النهائي للملف';
+      incomingMessage.localPath = null;
+      incomingMessage.temporary = false;
+      incomingMessage.savedPermanently = false;
+      incomingMessage.deliveryStatus = ChatDeliveryStatus.failed;
+      incomingMessage.error = 'فشل التحقق أو استلام الملف';
       notifyListeners();
       if (e is _RequestException) rethrow;
       throw const _RequestException(

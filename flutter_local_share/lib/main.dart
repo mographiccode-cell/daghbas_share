@@ -1281,7 +1281,9 @@ class _FileMessageContent extends StatelessWidget {
             message.error != null) ...[
           const SizedBox(height: 5),
           Text(
-            'فشل الإرسال • اضغط إعادة المحاولة',
+            message.isIncoming
+                ? 'فشل استلام الملف'
+                : 'فشل الإرسال • اضغط إعادة المحاولة',
             style: const TextStyle(
               color: Color(0xFFC62828),
               fontSize: 10.5,
