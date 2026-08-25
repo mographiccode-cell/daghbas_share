@@ -23,7 +23,12 @@ class DiscoveredDevice {
   final int port;
   final DateTime lastSeen;
 
-  DiscoveredDevice copyWith({String? name, String? ip, int? port, DateTime? lastSeen}) {
+  DiscoveredDevice copyWith({
+    String? name,
+    String? ip,
+    int? port,
+    DateTime? lastSeen,
+  }) {
     return DiscoveredDevice(
       deviceId: deviceId,
       name: name ?? this.name,
@@ -60,12 +65,12 @@ class Peer {
   }
 
   Map<String, dynamic> toJson() => {
-        'deviceId': deviceId,
-        'name': name,
-        'ip': ip,
-        'port': port,
-        'sharedKey': sharedKey,
-      };
+    'deviceId': deviceId,
+    'name': name,
+    'ip': ip,
+    'port': port,
+    'sharedKey': sharedKey,
+  };
 
   factory Peer.fromJson(Map<String, dynamic> json) {
     return Peer(
@@ -150,7 +155,8 @@ ChatMessageKind classifyChatText(String value) {
   final text = value.trim();
   final uri = Uri.tryParse(text);
   if (uri != null &&
-      (uri.scheme.toLowerCase() == 'http' || uri.scheme.toLowerCase() == 'https') &&
+      (uri.scheme.toLowerCase() == 'http' ||
+          uri.scheme.toLowerCase() == 'https') &&
       uri.host.isNotEmpty) {
     return ChatMessageKind.link;
   }
@@ -166,7 +172,10 @@ String safeFileName(String raw) {
 
   final dot = name.lastIndexOf('.');
   final stem = (dot > 0 ? name.substring(0, dot) : name).trim();
-  final reserved = RegExp(r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$', caseSensitive: false);
+  final reserved = RegExp(
+    r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$',
+    caseSensitive: false,
+  );
   if (reserved.hasMatch(stem)) name = '_$name';
 
   if (name.length > 180) {
@@ -191,6 +200,10 @@ String formatBytes(int bytes) {
     value /= 1024;
     index++;
   }
-  final decimals = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+  final decimals = value >= 100
+      ? 0
+      : value >= 10
+      ? 1
+      : 2;
   return '${value.toStringAsFixed(decimals)} ${units[index]}';
 }

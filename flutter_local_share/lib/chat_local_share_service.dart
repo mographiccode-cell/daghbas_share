@@ -24,6 +24,8 @@ class LocalShareService extends ChangeNotifier {
   static const int _maxConcurrentIncoming = 2;
   static const int _maxSmallBodyBytes = 32768;
   static const int _maxChatChars = 4096;
+  static const int _maxMessagesPerPeer = 1500;
+  static const int _maxTransferHistory = 400;
   static const Duration _pairCodeLifetime = Duration(minutes: 5);
   static const Duration _requestClockSkew = Duration(minutes: 2);
   static const Duration _idleTimeout = Duration(seconds: 30);
@@ -78,9 +80,26 @@ class LocalShareService extends ChangeNotifier {
 
   List<TransferItem> get transfers => List.unmodifiable(_transfers.reversed);
 
-  List<ChatMessage> messagesFor(String peerId) => _messages
-      .where((message) => message.peerId == peerId)
-      .toList(growable: false);
+  List<ChatMessage> messagesFor(String peerId) {
+    final list = _messages
+        .where((message) => message.peerId == peerId)
+        .toList(growable: false);
+    list.sort((a, b) => a.sentAt.compareTo(b.sentAt));
+    return list;
+  }
+
+  ChatMessage? lastMessageFor(String peerId) {
+    final list = messagesFor(peerId);
+    return list.isEmpty ? null : list.last;
+  }
+
+  TransferItem? transferForId(String? id) {
+    if (id == null || id.isEmpty) return null;
+    for (final item in _transfers.reversed) {
+      if (item.id == id) return item;
+    }
+    return null;
+  }
 
   String get receivePolicyLabel {
     if (Platform.isAndroid) return 'الحفظ التلقائي: Downloads/LocalShare';
@@ -105,7 +124,10 @@ class LocalShareService extends ChangeNotifier {
       localIp = await _bestLocalIp();
       await _startServer();
       await _startDiscovery();
-      _pairCodeTimer = Timer.periodic(_pairCodeLifetime, (_) => _rotatePairCode());
+      _pairCodeTimer = Timer.periodic(
+        _pairCodeLifetime,
+        (_) => _rotatePairCode(),
+      );
       initialized = true;
       notifyListeners();
     } catch (e) {
@@ -121,7 +143,9 @@ class LocalShareService extends ChangeNotifier {
       final host = Platform.localHostname.trim();
       return host.isEmpty ? 'Windows PC' : host;
     }
-    return Platform.localHostname.isEmpty ? 'LocalShare' : Platform.localHostname;
+    return Platform.localHostname.isEmpty
+        ? 'LocalShare'
+        : Platform.localHostname;
   }
 
   Future<Directory> _prepareReceiveDirectory() async {
@@ -187,7 +211,8 @@ class LocalShareService extends ChangeNotifier {
   bool isOnline(String id) {
     final device = _discovered[id];
     return device != null &&
-        DateTime.now().difference(device.lastSeen) < const Duration(seconds: 12);
+        DateTime.now().difference(device.lastSeen) <
+            const Duration(seconds: 12);
   }
 
   Future<String> _bestLocalIp() async {
@@ -225,7 +250,8 @@ class LocalShareService extends ChangeNotifier {
         _isPrivateIp(ip);
   }
 
-  bool _isValidDeviceId(String id) => id.length >= 16 &&
+  bool _isValidDeviceId(String id) =>
+      id.length >= 16 &&
       id.length <= 64 &&
       RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(id);
 
@@ -235,10 +261,13 @@ class LocalShareService extends ChangeNotifier {
       serverPort,
       shared: true,
     );
-    _server!.listen(_handleRequest, onError: (Object error) {
-      startupError = 'Server: $error';
-      notifyListeners();
-    });
+    _server!.listen(
+      _handleRequest,
+      onError: (Object error) {
+        startupError = 'Server: $error';
+        notifyListeners();
+      },
+    );
   }
 
   Future<void> _startDiscovery() async {
@@ -249,10 +278,13 @@ class LocalShareService extends ChangeNotifier {
         reuseAddress: true,
       );
       _discoverySocket!.broadcastEnabled = true;
-      _discoverySocket!.listen(_onDiscoveryEvent, onError: (_) {
-        discoveryAvailable = false;
-        notifyListeners();
-      });
+      _discoverySocket!.listen(
+        _onDiscoveryEvent,
+        onError: (_) {
+          discoveryAvailable = false;
+          notifyListeners();
+        },
+      );
       _broadcastTimer = Timer.periodic(
         const Duration(seconds: 3),
         (_) => _broadcastPresence(),
@@ -324,7 +356,8 @@ class LocalShareService extends ChangeNotifier {
     final now = DateTime.now();
     final before = _discovered.length;
     _discovered.removeWhere(
-      (_, device) => now.difference(device.lastSeen) > const Duration(seconds: 18),
+      (_, device) =>
+          now.difference(device.lastSeen) > const Duration(seconds: 18),
     );
     _recentNonces.removeWhere(
       (_, time) => now.difference(time) > const Duration(minutes: 10),
@@ -366,7 +399,13 @@ class LocalShareService extends ChangeNotifier {
           'port': serverPort,
           'pairSalt': _crypto.b64(_pairSalt),
           'pairEpoch': _pairEpoch,
-          'features': ['chat', 'links', 'files', 'temp-windows', 'android-public-save'],
+          'features': [
+            'chat',
+            'links',
+            'files',
+            'temp-windows',
+            'android-public-save',
+          ],
         });
         return;
       }
@@ -392,11 +431,9 @@ class LocalShareService extends ChangeNotifier {
       _jsonResponse(request, e.statusCode, {'error': e.code});
     } catch (_) {
       try {
-        _jsonResponse(
-          request,
-          HttpStatus.internalServerError,
-          {'error': 'request_failed'},
-        );
+        _jsonResponse(request, HttpStatus.internalServerError, {
+          'error': 'request_failed',
+        });
       } catch (_) {}
     }
   }
@@ -572,30 +609,38 @@ class LocalShareService extends ChangeNotifier {
     final kind = kindRaw == 'link'
         ? ChatMessageKind.link
         : kindRaw == 'text'
-            ? ChatMessageKind.text
-            : null;
+        ? ChatMessageKind.text
+        : null;
     if (id.length < 8 ||
         id.length > 64 ||
         kind == null ||
         text.isEmpty ||
         text.length > _maxChatChars ||
-        (kind == ChatMessageKind.link && classifyChatText(text) != ChatMessageKind.link)) {
+        (kind == ChatMessageKind.link &&
+            classifyChatText(text) != ChatMessageKind.link)) {
       throw const _RequestException(HttpStatus.badRequest, 'invalid_message');
     }
 
     _recentNonces[replayKey] = DateTime.now();
-    _messages.add(
-      ChatMessage(
-        id: id,
-        peerId: peer.deviceId,
-        peerName: peer.name,
-        kind: kind,
-        direction: ChatMessageDirection.receive,
-        sentAt: DateTime.fromMillisecondsSinceEpoch(timestamp),
-        text: text,
-      ),
+    final duplicate = _messages.any(
+      (message) => message.peerId == peer.deviceId && message.id == id,
     );
-    notifyListeners();
+    if (!duplicate) {
+      _messages.add(
+        ChatMessage(
+          id: id,
+          peerId: peer.deviceId,
+          peerName: peer.name,
+          kind: kind,
+          direction: ChatMessageDirection.receive,
+          sentAt: DateTime.fromMillisecondsSinceEpoch(timestamp),
+          text: text,
+          deliveryStatus: ChatDeliveryStatus.delivered,
+        ),
+      );
+      _trimMessageHistory(peer.deviceId);
+      notifyListeners();
+    }
     final ack = await _crypto.macString(
       _peerKey(peer),
       'msgack|$protocolVersion|$deviceId|$sourceId|$timestamp|$nonce|$id',
@@ -605,7 +650,10 @@ class LocalShareService extends ChangeNotifier {
 
   Future<void> _handleEncryptedUpload(HttpRequest request) async {
     if (_activeIncoming >= _maxConcurrentIncoming) {
-      throw const _RequestException(HttpStatus.tooManyRequests, 'receiver_busy');
+      throw const _RequestException(
+        HttpStatus.tooManyRequests,
+        'receiver_busy',
+      );
     }
 
     final sourceId = request.headers.value('x-localshare-device') ?? '';
@@ -639,7 +687,10 @@ class LocalShareService extends ChangeNotifier {
         encodedBox: metaHeader,
       );
     } catch (_) {
-      throw const _RequestException(HttpStatus.unauthorized, 'invalid_metadata');
+      throw const _RequestException(
+        HttpStatus.unauthorized,
+        'invalid_metadata',
+      );
     }
 
     final fileName = safeFileName('${meta['name'] ?? ''}');
@@ -649,7 +700,10 @@ class LocalShareService extends ChangeNotifier {
     }
     final expectedLength = _crypto.encryptedBodyLength(total);
     if (request.contentLength >= 0 && request.contentLength != expectedLength) {
-      throw const _RequestException(HttpStatus.badRequest, 'invalid_body_length');
+      throw const _RequestException(
+        HttpStatus.badRequest,
+        'invalid_body_length',
+      );
     }
 
     _recentNonces[replayKey] = DateTime.now();
@@ -666,6 +720,7 @@ class LocalShareService extends ChangeNotifier {
       localPath: destination.path,
     );
     _transfers.add(transfer);
+    _trimTransfers();
     notifyListeners();
 
     IOSink? sink;
@@ -688,8 +743,9 @@ class LocalShareService extends ChangeNotifier {
       while (remaining > 0) {
         final plainLength = min(_chunkSize, remaining);
         final cipherText = await reader.readExact(plainLength);
-        final macBytes =
-            await reader.readExact(_crypto.cipher.macAlgorithm.macLength);
+        final macBytes = await reader.readExact(
+          _crypto.cipher.macAlgorithm.macLength,
+        );
         final nonce = _crypto.chunkNonce(transferBase, chunkIndex);
         final aad = _crypto.chunkAad(
           sourceId,
@@ -728,10 +784,10 @@ class LocalShareService extends ChangeNotifier {
       var permanent = !Platform.isWindows;
 
       if (Platform.isAndroid) {
-        final savedUri = await _native.invokeMethod<String>('exportToDownloads', {
-          'path': destination.path,
-          'name': destination.uri.pathSegments.last,
-        });
+        final savedUri = await _native.invokeMethod<String>(
+          'exportToDownloads',
+          {'path': destination.path, 'name': destination.uri.pathSegments.last},
+        );
         if (savedUri == null || savedUri.isEmpty) {
           throw const FileSystemException('Android public save failed');
         }
@@ -761,6 +817,7 @@ class LocalShareService extends ChangeNotifier {
           savedPermanently: permanent,
         ),
       );
+      _trimMessageHistory(peer.deviceId);
       notifyListeners();
 
       final ack = await _crypto.macString(
@@ -867,7 +924,9 @@ class LocalShareService extends ChangeNotifier {
       final request = await client.getUrl(
         Uri(scheme: 'http', host: ip, port: port, path: '/hello'),
       );
-      final response = await request.close().timeout(const Duration(seconds: 5));
+      final response = await request.close().timeout(
+        const Duration(seconds: 5),
+      );
       final text = await utf8.decoder.bind(response).join();
       if (response.statusCode != HttpStatus.ok) {
         throw const PairingException('الجهاز لا يستجيب كبروتوكول LocalShare');
@@ -877,7 +936,9 @@ class LocalShareService extends ChangeNotifier {
           (decoded['protocol'] as num?)?.toInt() != protocolVersion ||
           !_isValidDeviceId('${decoded['deviceId'] ?? ''}') ||
           !_crypto.isValidB64Length('${decoded['pairSalt'] ?? ''}', 16)) {
-        throw const PairingException('إصدار LocalShare على الجهاز الآخر غير متوافق');
+        throw const PairingException(
+          'إصدار LocalShare على الجهاز الآخر غير متوافق',
+        );
       }
       return decoded;
     } finally {
@@ -916,18 +977,24 @@ class LocalShareService extends ChangeNotifier {
         Uri(scheme: 'http', host: device.ip, port: remotePort, path: '/pair'),
       );
       request.headers.contentType = ContentType.json;
-      request.write(jsonEncode({
-        'deviceId': deviceId,
-        'name': deviceName,
-        'port': serverPort,
-        'clientNonce': clientNonce,
-        'pairEpoch': pairEpoch,
-        'proof': proof,
-      }));
-      final response = await request.close().timeout(const Duration(seconds: 20));
+      request.write(
+        jsonEncode({
+          'deviceId': deviceId,
+          'name': deviceName,
+          'port': serverPort,
+          'clientNonce': clientNonce,
+          'pairEpoch': pairEpoch,
+          'proof': proof,
+        }),
+      );
+      final response = await request.close().timeout(
+        const Duration(seconds: 20),
+      );
       final text = await utf8.decoder.bind(response).join();
       if (response.statusCode == HttpStatus.tooManyRequests) {
-        throw const PairingException('تم إيقاف محاولات الربط مؤقتًا بسبب محاولات كثيرة.');
+        throw const PairingException(
+          'تم إيقاف محاولات الربط مؤقتًا بسبب محاولات كثيرة.',
+        );
       }
       if (response.statusCode != HttpStatus.ok) {
         throw const PairingException('فشل الربط. تحقق من الرمز وحاول من جديد.');
@@ -939,7 +1006,8 @@ class LocalShareService extends ChangeNotifier {
       final responseId = '${decoded['deviceId'] ?? ''}';
       final serverNonce = '${decoded['serverNonce'] ?? ''}';
       final responseProof = '${decoded['proof'] ?? ''}';
-      if (responseId != remoteId || !_crypto.isValidB64Length(serverNonce, 16)) {
+      if (responseId != remoteId ||
+          !_crypto.isValidB64Length(serverNonce, 16)) {
         throw const PairingException('استجابة الربط غير صالحة');
       }
       final expected = await _crypto.macString(
@@ -968,9 +1036,33 @@ class LocalShareService extends ChangeNotifier {
       notifyListeners();
       return peer;
     } on TimeoutException {
-      throw const PairingException('انتهت مهلة الاتصال. تأكد أن الجهازين على نفس الشبكة.');
+      throw const PairingException(
+        'انتهت مهلة الاتصال. تأكد أن الجهازين على نفس الشبكة.',
+      );
     } finally {
       client.close(force: true);
+    }
+  }
+
+  void _trimMessageHistory(String peerId) {
+    final peerMessages = _messages.where((m) => m.peerId == peerId).toList();
+    final overflow = peerMessages.length - _maxMessagesPerPeer;
+    if (overflow <= 0) return;
+    final removeIds = peerMessages.take(overflow).map((m) => m.id).toSet();
+    _messages.removeWhere(
+      (m) => m.peerId == peerId && removeIds.contains(m.id),
+    );
+  }
+
+  void _trimTransfers() {
+    while (_transfers.length > _maxTransferHistory) {
+      final index = _transfers.indexWhere(
+        (item) =>
+            item.status == TransferStatus.completed ||
+            item.status == TransferStatus.failed,
+      );
+      if (index < 0) break;
+      _transfers.removeAt(index);
     }
   }
 
@@ -985,75 +1077,116 @@ class LocalShareService extends ChangeNotifier {
     final text = rawText.trim();
     if (text.isEmpty) return;
     if (text.length > _maxChatChars) {
-      throw const FormatException('الرسالة طويلة جدًا. الحد الأقصى 4096 حرفًا.');
+      throw const FormatException(
+        'الرسالة طويلة جدًا. الحد الأقصى 4096 حرفًا.',
+      );
     }
-    final kind = classifyChatText(text);
-    final current = await _resolveVerifiedPeer(peer);
-    final key = _peerKey(current);
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final nonce = _crypto.b64(_crypto.randomBytes(12));
-    final id = _randomToken(16);
-    final box = await _crypto.encryptPayload(
-      sharedKey: key,
-      senderId: deviceId,
-      receiverId: current.deviceId,
-      timestamp: timestamp,
-      nonceId: nonce,
-      purpose: 'message',
-      payload: {
-        'id': id,
-        'kind': kind == ChatMessageKind.link ? 'link' : 'text',
-        'text': text,
-      },
+    final message = ChatMessage(
+      id: _randomToken(16),
+      peerId: peer.deviceId,
+      peerName: peer.name,
+      kind: classifyChatText(text),
+      direction: ChatMessageDirection.send,
+      sentAt: DateTime.now(),
+      text: text,
+      deliveryStatus: ChatDeliveryStatus.sending,
     );
+    _messages.add(message);
+    _trimMessageHistory(peer.deviceId);
+    notifyListeners();
+    await _deliverTextMessage(peer, message);
+  }
 
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+  Future<void> retryMessage(Peer peer, ChatMessage message) async {
+    if (!message.canRetry) return;
+    message.deliveryStatus = ChatDeliveryStatus.sending;
+    message.error = null;
+    notifyListeners();
+    if (message.kind == ChatMessageKind.file) {
+      final path = message.localPath;
+      if (path == null || path.isEmpty || !await File(path).exists()) {
+        message.deliveryStatus = ChatDeliveryStatus.failed;
+        message.error = 'الملف الأصلي لم يعد موجودًا';
+        notifyListeners();
+        return;
+      }
+      await sendFile(peer, File(path), existingMessage: message);
+      return;
+    }
+    await _deliverTextMessage(peer, message);
+  }
+
+  Future<void> _deliverTextMessage(Peer peer, ChatMessage message) async {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
     try {
-      final request = await client.postUrl(
-        Uri(
-          scheme: 'http',
-          host: current.ip,
-          port: current.port,
-          path: '/message3',
-        ),
+      final current = await _resolveVerifiedPeer(peer);
+      final key = _peerKey(current);
+      final nonce = _crypto.b64(_crypto.randomBytes(12));
+      final box = await _crypto.encryptPayload(
+        sharedKey: key,
+        senderId: deviceId,
+        receiverId: current.deviceId,
+        timestamp: timestamp,
+        nonceId: nonce,
+        purpose: 'message',
+        payload: {
+          'id': message.id,
+          'kind': message.kind == ChatMessageKind.link ? 'link' : 'text',
+          'text': message.text,
+        },
       );
-      request.headers.contentType = ContentType.json;
-      request.write(jsonEncode({
-        'deviceId': deviceId,
-        'timestamp': timestamp,
-        'nonce': nonce,
-        'box': box,
-      }));
-      final response = await request.close().timeout(const Duration(seconds: 10));
-      final body = await utf8.decoder.bind(response).join();
-      if (response.statusCode != HttpStatus.ok) {
-        throw HttpException('Message failed: ${response.statusCode}');
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 5);
+      try {
+        final request = await client.postUrl(
+          Uri(
+            scheme: 'http',
+            host: current.ip,
+            port: current.port,
+            path: '/message3',
+          ),
+        );
+        request.headers.contentType = ContentType.json;
+        request.write(
+          jsonEncode({
+            'deviceId': deviceId,
+            'timestamp': timestamp,
+            'nonce': nonce,
+            'box': box,
+          }),
+        );
+        final response = await request.close().timeout(
+          const Duration(seconds: 10),
+        );
+        final body = await utf8.decoder.bind(response).join();
+        if (response.statusCode != HttpStatus.ok) {
+          throw HttpException('Message failed: ${response.statusCode}');
+        }
+        final decoded = jsonDecode(body);
+        if (decoded is! Map<String, dynamic>) {
+          throw const PairingException('استجابة الرسالة غير صالحة');
+        }
+        final expectedAck = await _crypto.macString(
+          key,
+          'msgack|$protocolVersion|${current.deviceId}|$deviceId|$timestamp|$nonce|${message.id}',
+        );
+        if (!_crypto.constantTimeEquals(
+          expectedAck,
+          '${decoded['proof'] ?? ''}',
+        )) {
+          throw const PairingException('تعذر التحقق من وصول الرسالة');
+        }
+        message.deliveryStatus = ChatDeliveryStatus.delivered;
+        message.error = null;
+        notifyListeners();
+      } finally {
+        client.close(force: true);
       }
-      final decoded = jsonDecode(body);
-      if (decoded is! Map<String, dynamic>) {
-        throw const PairingException('استجابة الرسالة غير صالحة');
-      }
-      final expectedAck = await _crypto.macString(
-        key,
-        'msgack|$protocolVersion|${current.deviceId}|$deviceId|$timestamp|$nonce|$id',
-      );
-      if (!_crypto.constantTimeEquals(expectedAck, '${decoded['proof'] ?? ''}')) {
-        throw const PairingException('تعذر التحقق من وصول الرسالة');
-      }
-      _messages.add(
-        ChatMessage(
-          id: id,
-          peerId: current.deviceId,
-          peerName: current.name,
-          kind: kind,
-          direction: ChatMessageDirection.send,
-          sentAt: DateTime.fromMillisecondsSinceEpoch(timestamp),
-          text: text,
-        ),
-      );
+    } catch (e) {
+      message.deliveryStatus = ChatDeliveryStatus.failed;
+      message.error = e.toString().replaceFirst('Exception: ', '');
       notifyListeners();
-    } finally {
-      client.close(force: true);
+      rethrow;
     }
   }
 
@@ -1071,11 +1204,18 @@ class LocalShareService extends ChangeNotifier {
     }
   }
 
-  Future<void> sendFile(Peer peer, File file) async {
-    if (!await file.exists()) throw const FileSystemException('الملف غير موجود');
+  Future<void> sendFile(
+    Peer peer,
+    File file, {
+    ChatMessage? existingMessage,
+  }) async {
+    if (!await file.exists())
+      throw const FileSystemException('الملف غير موجود');
     final total = await file.length();
     if (total < 0 || total > _maxFileBytes) {
-      throw const FileSystemException('حجم الملف يتجاوز حد الأمان البالغ 50 GB');
+      throw const FileSystemException(
+        'حجم الملف يتجاوز حد الأمان البالغ 50 GB',
+      );
     }
     final fileName = safeFileName(file.uri.pathSegments.last);
     final transfer = TransferItem(
@@ -1088,6 +1228,31 @@ class LocalShareService extends ChangeNotifier {
       status: TransferStatus.running,
     );
     _transfers.add(transfer);
+    _trimTransfers();
+
+    final message =
+        existingMessage ??
+        ChatMessage(
+          id: _randomToken(16),
+          peerId: peer.deviceId,
+          peerName: peer.name,
+          kind: ChatMessageKind.file,
+          direction: ChatMessageDirection.send,
+          sentAt: DateTime.now(),
+          fileName: fileName,
+          fileSize: total,
+          localPath: file.path,
+          temporary: false,
+          savedPermanently: true,
+          deliveryStatus: ChatDeliveryStatus.sending,
+        );
+    message.transferId = transfer.id;
+    message.deliveryStatus = ChatDeliveryStatus.sending;
+    message.error = null;
+    if (existingMessage == null) {
+      _messages.add(message);
+      _trimMessageHistory(peer.deviceId);
+    }
     notifyListeners();
 
     try {
@@ -1112,7 +1277,8 @@ class LocalShareService extends ChangeNotifier {
         deviceId,
         current.deviceId,
       );
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 5);
       try {
         final request = await client.postUrl(
           Uri(
@@ -1136,9 +1302,8 @@ class LocalShareService extends ChangeNotifier {
         try {
           while (sent < total) {
             final plain = await source.read(min(_chunkSize, total - sent));
-            if (plain.isEmpty) {
+            if (plain.isEmpty)
               throw const FileSystemException('Unexpected end of source file');
-            }
             final nonce = _crypto.chunkNonce(transferBase, chunkIndex);
             final aad = _crypto.chunkAad(
               deviceId,
@@ -1161,7 +1326,8 @@ class LocalShareService extends ChangeNotifier {
             if (chunkIndex % 4 == 0) await request.flush();
             transfer.progress = total == 0 ? 1 : (sent / total).clamp(0.0, 1.0);
             final now = DateTime.now();
-            if (now.difference(lastNotify) > const Duration(milliseconds: 120)) {
+            if (now.difference(lastNotify) >
+                const Duration(milliseconds: 120)) {
               lastNotify = now;
               notifyListeners();
             }
@@ -1185,8 +1351,13 @@ class LocalShareService extends ChangeNotifier {
           'ack|$protocolVersion|${current.deviceId}|$deviceId|$timestamp|$transferNonce|$bytes',
         );
         if (bytes != total ||
-            !_crypto.constantTimeEquals(expectedAck, '${decoded['proof'] ?? ''}')) {
-          throw const PairingException('تعذر التحقق من استلام الملف على الجهاز الآخر');
+            !_crypto.constantTimeEquals(
+              expectedAck,
+              '${decoded['proof'] ?? ''}',
+            )) {
+          throw const PairingException(
+            'تعذر التحقق من استلام الملف على الجهاز الآخر',
+          );
         }
       } finally {
         client.close(force: true);
@@ -1194,25 +1365,14 @@ class LocalShareService extends ChangeNotifier {
 
       transfer.progress = 1;
       transfer.status = TransferStatus.completed;
-      _messages.add(
-        ChatMessage(
-          id: _randomToken(12),
-          peerId: current.deviceId,
-          peerName: current.name,
-          kind: ChatMessageKind.file,
-          direction: ChatMessageDirection.send,
-          sentAt: DateTime.now(),
-          fileName: fileName,
-          fileSize: total,
-          localPath: file.path,
-          temporary: false,
-          savedPermanently: true,
-        ),
-      );
+      message.deliveryStatus = ChatDeliveryStatus.delivered;
+      message.error = null;
       notifyListeners();
     } catch (e) {
       transfer.status = TransferStatus.failed;
       transfer.error = e.toString();
+      message.deliveryStatus = ChatDeliveryStatus.failed;
+      message.error = e.toString().replaceFirst('Exception: ', '');
       notifyListeners();
       rethrow;
     }
@@ -1256,7 +1416,9 @@ class LocalShareService extends ChangeNotifier {
       if (!message.savedPermanently && !await File(path).exists()) {
         throw const FileSystemException('الملف المؤقت لم يعد موجودًا');
       }
-      await Process.start('explorer.exe', [path], mode: ProcessStartMode.detached);
+      await Process.start('explorer.exe', [
+        path,
+      ], mode: ProcessStartMode.detached);
     }
   }
 
@@ -1272,11 +1434,10 @@ class LocalShareService extends ChangeNotifier {
       return;
     }
     if (Platform.isWindows) {
-      await Process.start(
-        'rundll32.exe',
-        ['url.dll,FileProtocolHandler', uri.toString()],
-        mode: ProcessStartMode.detached,
-      );
+      await Process.start('rundll32.exe', [
+        'url.dll,FileProtocolHandler',
+        uri.toString(),
+      ], mode: ProcessStartMode.detached);
     }
   }
 
@@ -1285,7 +1446,11 @@ class LocalShareService extends ChangeNotifier {
     final candidate = _discovered[peer.deviceId];
     final endpoints = <({String ip, int port, String name})>[];
     if (candidate != null) {
-      endpoints.add((ip: candidate.ip, port: candidate.port, name: candidate.name));
+      endpoints.add((
+        ip: candidate.ip,
+        port: candidate.port,
+        name: candidate.name,
+      ));
     }
     if (!endpoints.any((e) => e.ip == stored.ip && e.port == stored.port)) {
       endpoints.add((ip: stored.ip, port: stored.port, name: stored.name));
@@ -1302,7 +1467,9 @@ class LocalShareService extends ChangeNotifier {
         return updated;
       }
     }
-    throw const PairingException('تعذر التحقق من الجهاز المرتبط. تأكد أنه مفتوح وعلى نفس الشبكة.');
+    throw const PairingException(
+      'تعذر التحقق من الجهاز المرتبط. تأكد أنه مفتوح وعلى نفس الشبكة.',
+    );
   }
 
   Future<bool> _verifyPeerEndpoint(Peer peer, String ip, int port) async {
@@ -1320,13 +1487,17 @@ class LocalShareService extends ChangeNotifier {
         Uri(scheme: 'http', host: ip, port: port, path: '/verify'),
       );
       request.headers.contentType = ContentType.json;
-      request.write(jsonEncode({
-        'deviceId': deviceId,
-        'timestamp': timestamp,
-        'nonce': nonce,
-        'proof': proof,
-      }));
-      final response = await request.close().timeout(const Duration(seconds: 5));
+      request.write(
+        jsonEncode({
+          'deviceId': deviceId,
+          'timestamp': timestamp,
+          'nonce': nonce,
+          'proof': proof,
+        }),
+      );
+      final response = await request.close().timeout(
+        const Duration(seconds: 5),
+      );
       final text = await utf8.decoder.bind(response).join();
       if (response.statusCode != HttpStatus.ok) return false;
       final decoded = jsonDecode(text);
@@ -1371,7 +1542,9 @@ class LocalShareService extends ChangeNotifier {
 
   List<int> _peerKey(Peer peer) {
     if (!_crypto.isValidB64Length(peer.sharedKey, 32)) {
-      throw const PairingException('بيانات ثقة الجهاز المرتبط غير صالحة. أعد الربط.');
+      throw const PairingException(
+        'بيانات ثقة الجهاز المرتبط غير صالحة. أعد الربط.',
+      );
     }
     return _crypto.b64d(peer.sharedKey);
   }
@@ -1381,7 +1554,8 @@ class LocalShareService extends ChangeNotifier {
     if (raw == null || raw.isEmpty) return;
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! List<dynamic>) throw const FormatException('Invalid peers');
+      if (decoded is! List<dynamic>)
+        throw const FormatException('Invalid peers');
       for (final item in decoded) {
         final peer = Peer.fromJson(Map<String, dynamic>.from(item as Map));
         if (_isValidDeviceId(peer.deviceId) &&
@@ -1398,7 +1572,9 @@ class LocalShareService extends ChangeNotifier {
   }
 
   Future<void> _savePeers() async {
-    final raw = jsonEncode(_paired.values.map((peer) => peer.toJson()).toList());
+    final raw = jsonEncode(
+      _paired.values.map((peer) => peer.toJson()).toList(),
+    );
     await _secureStorage.write(key: _securePeersKey, value: raw);
   }
 
@@ -1439,7 +1615,7 @@ class _RequestException implements Exception {
 
 class _ByteStreamReader {
   _ByteStreamReader(Stream<List<int>> stream, {required this.timeout})
-      : _iterator = StreamIterator<List<int>>(stream);
+    : _iterator = StreamIterator<List<int>>(stream);
 
   final StreamIterator<List<int>> _iterator;
   final Duration timeout;

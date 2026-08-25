@@ -6,15 +6,15 @@ import 'package:cryptography/cryptography.dart';
 
 class LocalShareCrypto {
   LocalShareCrypto()
-      : cipher = Chacha20.poly1305Aead(),
-        hmac = Hmac.sha256(),
-        hkdf = Hkdf(hmac: Hmac.sha256(), outputLength: 32),
-        pairKdf = Argon2id(
-          memory: 64 * 1024,
-          parallelism: 1,
-          iterations: 2,
-          hashLength: 32,
-        );
+    : cipher = Chacha20.poly1305Aead(),
+      hmac = Hmac.sha256(),
+      hkdf = Hkdf(hmac: Hmac.sha256(), outputLength: 32),
+      pairKdf = Argon2id(
+        memory: 64 * 1024,
+        parallelism: 1,
+        iterations: 2,
+        hashLength: 32,
+      );
 
   static const int protocolVersion = 3;
   static const int chunkSize = 256 * 1024;
@@ -35,7 +35,10 @@ class LocalShareCrypto {
       ...salt,
       ...utf8.encode('|${ids[0]}|${ids[1]}|LocalShare3'),
     ];
-    final key = await pairKdf.deriveKeyFromPassword(password: code, nonce: nonce);
+    final key = await pairKdf.deriveKeyFromPassword(
+      password: code,
+      nonce: nonce,
+    );
     return key.extractBytes();
   }
 

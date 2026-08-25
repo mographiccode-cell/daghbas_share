@@ -90,7 +90,10 @@ class LocalShareService extends ChangeNotifier {
       localIp = await _bestLocalIp();
       await _startServer();
       await _startDiscovery();
-      _pairCodeTimer = Timer.periodic(_pairCodeLifetime, (_) => _rotatePairCode());
+      _pairCodeTimer = Timer.periodic(
+        _pairCodeLifetime,
+        (_) => _rotatePairCode(),
+      );
       initialized = true;
       notifyListeners();
     } catch (e) {
@@ -106,7 +109,9 @@ class LocalShareService extends ChangeNotifier {
       final host = Platform.localHostname.trim();
       return host.isEmpty ? 'Windows PC' : host;
     }
-    return Platform.localHostname.isEmpty ? 'LocalShare' : Platform.localHostname;
+    return Platform.localHostname.isEmpty
+        ? 'LocalShare'
+        : Platform.localHostname;
   }
 
   Future<void> setDeviceName(String value) async {
@@ -123,14 +128,17 @@ class LocalShareService extends ChangeNotifier {
   bool isOnline(String id) {
     final item = _discovered[id];
     if (item == null) return false;
-    return DateTime.now().difference(item.lastSeen) < const Duration(seconds: 12);
+    return DateTime.now().difference(item.lastSeen) <
+        const Duration(seconds: 12);
   }
 
   Future<Directory> _resolveReceiveDirectory() async {
     if (Platform.isWindows) {
       final downloads = await getDownloadsDirectory();
       if (downloads != null) {
-        return Directory('${downloads.path}${Platform.pathSeparator}LocalShare');
+        return Directory(
+          '${downloads.path}${Platform.pathSeparator}LocalShare',
+        );
       }
     }
     if (Platform.isAndroid) {
@@ -179,11 +187,18 @@ class LocalShareService extends ChangeNotifier {
   }
 
   Future<void> _startServer() async {
-    _server = await HttpServer.bind(InternetAddress.anyIPv4, serverPort, shared: true);
-    _server!.listen(_handleRequest, onError: (Object e) {
-      startupError = 'Server: $e';
-      notifyListeners();
-    });
+    _server = await HttpServer.bind(
+      InternetAddress.anyIPv4,
+      serverPort,
+      shared: true,
+    );
+    _server!.listen(
+      _handleRequest,
+      onError: (Object e) {
+        startupError = 'Server: $e';
+        notifyListeners();
+      },
+    );
   }
 
   Future<void> _startDiscovery() async {
@@ -194,10 +209,13 @@ class LocalShareService extends ChangeNotifier {
         reuseAddress: true,
       );
       _discoverySocket!.broadcastEnabled = true;
-      _discoverySocket!.listen(_onDiscoveryEvent, onError: (_) {
-        discoveryAvailable = false;
-        notifyListeners();
-      });
+      _discoverySocket!.listen(
+        _onDiscoveryEvent,
+        onError: (_) {
+          discoveryAvailable = false;
+          notifyListeners();
+        },
+      );
       _broadcastTimer = Timer.periodic(
         const Duration(seconds: 3),
         (_) => _broadcastPresence(),
@@ -269,7 +287,8 @@ class LocalShareService extends ChangeNotifier {
     final now = DateTime.now();
     final before = _discovered.length;
     _discovered.removeWhere(
-      (_, value) => now.difference(value.lastSeen) > const Duration(seconds: 18),
+      (_, value) =>
+          now.difference(value.lastSeen) > const Duration(seconds: 18),
     );
     _recentTransferNonces.removeWhere(
       (_, value) => now.difference(value) > const Duration(minutes: 10),
@@ -331,11 +350,9 @@ class LocalShareService extends ChangeNotifier {
       _jsonResponse(request, e.statusCode, {'error': e.code});
     } catch (_) {
       try {
-        _jsonResponse(
-          request,
-          HttpStatus.internalServerError,
-          {'error': 'transfer_error'},
-        );
+        _jsonResponse(request, HttpStatus.internalServerError, {
+          'error': 'transfer_error',
+        });
       } catch (_) {}
     }
   }
@@ -473,14 +490,16 @@ class LocalShareService extends ChangeNotifier {
 
   Future<void> _handleEncryptedUpload(HttpRequest request) async {
     if (_activeIncoming >= _maxConcurrentIncoming) {
-      throw const _RequestException(HttpStatus.tooManyRequests, 'receiver_busy');
+      throw const _RequestException(
+        HttpStatus.tooManyRequests,
+        'receiver_busy',
+      );
     }
 
     final sourceId = request.headers.value('x-localshare-device') ?? '';
     final timestamp =
         int.tryParse(request.headers.value('x-localshare-time') ?? '') ?? 0;
-    final transferNonce =
-        request.headers.value('x-localshare-transfer') ?? '';
+    final transferNonce = request.headers.value('x-localshare-transfer') ?? '';
     final metaHeader = request.headers.value('x-localshare-meta') ?? '';
     final peer = _paired[sourceId];
     if (peer == null ||
@@ -517,10 +536,7 @@ class LocalShareService extends ChangeNotifier {
     final fileName = safeFileName('${meta['name'] ?? ''}');
     final total = (meta['size'] as num?)?.toInt() ?? -1;
     if (total < 0 || total > _maxFileBytes) {
-      throw const _RequestException(
-        HttpStatus.badRequest,
-        'invalid_file_size',
-      );
+      throw const _RequestException(HttpStatus.badRequest, 'invalid_file_size');
     }
     final expectedBodyLength = _crypto.encryptedBodyLength(total);
     if (request.contentLength >= 0 &&
@@ -567,8 +583,9 @@ class LocalShareService extends ChangeNotifier {
       while (remaining > 0) {
         final plainLength = min(_chunkSize, remaining);
         final cipherText = await reader.readExact(plainLength);
-        final macBytes =
-            await reader.readExact(_crypto.cipher.macAlgorithm.macLength);
+        final macBytes = await reader.readExact(
+          _crypto.cipher.macAlgorithm.macLength,
+        );
         final nonce = _crypto.chunkNonce(transferBase, chunkIndex);
         final aad = _crypto.chunkAad(
           sourceId,
@@ -711,7 +728,9 @@ class LocalShareService extends ChangeNotifier {
       final request = await client.getUrl(
         Uri(scheme: 'http', host: ip, port: port, path: '/hello'),
       );
-      final response = await request.close().timeout(const Duration(seconds: 5));
+      final response = await request.close().timeout(
+        const Duration(seconds: 5),
+      );
       final text = await utf8.decoder.bind(response).join();
       if (response.statusCode != HttpStatus.ok) {
         throw const PairingException(
@@ -766,23 +785,22 @@ class LocalShareService extends ChangeNotifier {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
     try {
       final request = await client.postUrl(
-        Uri(
-          scheme: 'http',
-          host: device.ip,
-          port: remotePort,
-          path: '/pair',
-        ),
+        Uri(scheme: 'http', host: device.ip, port: remotePort, path: '/pair'),
       );
       request.headers.contentType = ContentType.json;
-      request.write(jsonEncode({
-        'deviceId': deviceId,
-        'name': deviceName,
-        'port': serverPort,
-        'clientNonce': clientNonce,
-        'pairEpoch': pairEpoch,
-        'proof': proof,
-      }));
-      final response = await request.close().timeout(const Duration(seconds: 20));
+      request.write(
+        jsonEncode({
+          'deviceId': deviceId,
+          'name': deviceName,
+          'port': serverPort,
+          'clientNonce': clientNonce,
+          'pairEpoch': pairEpoch,
+          'proof': proof,
+        }),
+      );
+      final response = await request.close().timeout(
+        const Duration(seconds: 20),
+      );
       final text = await utf8.decoder.bind(response).join();
       if (response.statusCode == HttpStatus.tooManyRequests) {
         throw const PairingException(
@@ -902,7 +920,8 @@ class LocalShareService extends ChangeNotifier {
         deviceId,
         current.deviceId,
       );
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 5);
       try {
         final request = await client.postUrl(
           Uri(
@@ -953,7 +972,8 @@ class LocalShareService extends ChangeNotifier {
                 ? 1.0
                 : (sent / total).clamp(0.0, 1.0).toDouble();
             final now = DateTime.now();
-            if (now.difference(lastNotify) > const Duration(milliseconds: 120)) {
+            if (now.difference(lastNotify) >
+                const Duration(milliseconds: 120)) {
               lastNotify = now;
               notifyListeners();
             }
@@ -1042,13 +1062,17 @@ class LocalShareService extends ChangeNotifier {
         Uri(scheme: 'http', host: ip, port: port, path: '/verify'),
       );
       request.headers.contentType = ContentType.json;
-      request.write(jsonEncode({
-        'deviceId': deviceId,
-        'timestamp': timestamp,
-        'nonce': nonce,
-        'proof': proof,
-      }));
-      final response = await request.close().timeout(const Duration(seconds: 5));
+      request.write(
+        jsonEncode({
+          'deviceId': deviceId,
+          'timestamp': timestamp,
+          'nonce': nonce,
+          'proof': proof,
+        }),
+      );
+      final response = await request.close().timeout(
+        const Duration(seconds: 5),
+      );
       final text = await utf8.decoder.bind(response).join();
       if (response.statusCode != HttpStatus.ok) return false;
       final decoded = jsonDecode(text);
@@ -1113,7 +1137,9 @@ class LocalShareService extends ChangeNotifier {
         .list(followLinks: false)
         .where((e) => e is File)
         .toList();
-    items.sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
+    items.sort(
+      (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
+    );
     return items;
   }
 
@@ -1142,7 +1168,8 @@ class LocalShareService extends ChangeNotifier {
     if (raw == null || raw.isEmpty) return;
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! List<dynamic>) throw const FormatException('Invalid peers');
+      if (decoded is! List<dynamic>)
+        throw const FormatException('Invalid peers');
       for (final item in decoded) {
         final peer = Peer.fromJson(Map<String, dynamic>.from(item as Map));
         if (_isValidDeviceId(peer.deviceId) &&
@@ -1199,7 +1226,7 @@ class _RequestException implements Exception {
 
 class _ByteStreamReader {
   _ByteStreamReader(Stream<List<int>> stream, {required this.timeout})
-      : _iterator = StreamIterator<List<int>>(stream);
+    : _iterator = StreamIterator<List<int>>(stream);
 
   final StreamIterator<List<int>> _iterator;
   final Duration timeout;
