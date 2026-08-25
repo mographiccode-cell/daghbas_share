@@ -60,16 +60,46 @@ jobs:
         working-directory: build_status_saver
         run: flutter build apk --release
 
-      - name: Verify APK
+      - name: Create temporary release signing key
         run: |
-          test -s build_status_saver/build/app/outputs/flutter-apk/app-release.apk
-          ls -lh build_status_saver/build/app/outputs/flutter-apk/app-release.apk
-          sha256sum build_status_saver/build/app/outputs/flutter-apk/app-release.apk
+          keytool -genkeypair -noprompt \
+            -keystore "$RUNNER_TEMP/status-saver-release.jks" \
+            -storepass status-saver-build \
+            -keypass status-saver-build \
+            -alias status-saver \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Status Saver, OU=Mobile, O=MographicCode, L=Aden, ST=Aden, C=YE"
 
-      - name: Upload APK artifact
+      - name: Sign APK with v1 v2 v3
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" sign \
+            --ks "$RUNNER_TEMP/status-saver-release.jks" \
+            --ks-key-alias status-saver \
+            --ks-pass pass:status-saver-build \
+            --key-pass pass:status-saver-build \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --out build_status_saver/build/app/outputs/flutter-apk/StatusSaver-v1.0.0.apk \
+            build_status_saver/build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Verify signed APK
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -s build_status_saver/build/app/outputs/flutter-apk/StatusSaver-v1.0.0.apk
+          "$APKSIGNER" verify --verbose --print-certs build_status_saver/build/app/outputs/flutter-apk/StatusSaver-v1.0.0.apk
+          unzip -t build_status_saver/build/app/outputs/flutter-apk/StatusSaver-v1.0.0.apk >/dev/null
+          ls -lh build_status_saver/build/app/outputs/flutter-apk/StatusSaver-v1.0.0.apk
+          sha256sum build_status_saver/build/app/outputs/flutter-apk/StatusSaver-v1.0.0.apk
+
+      - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: StatusSaver-APK
-          path: build_status_saver/build/app/outputs/flutter-apk/app-release.apk
+          name: StatusSaver-Signed-APK
+          path: build_status_saver/build/app/outputs/flutter-apk/StatusSaver-v1.0.0.apk
           if-no-files-found: error
           retention-days: 7
