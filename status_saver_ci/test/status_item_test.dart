@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/main.dart';
+import 'package:status_saver/main.dart';
 
 void main() {
   test('StatusItem detects video mime type', () {
