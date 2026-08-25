@@ -55,8 +55,10 @@ class LocalShareNotifications {
   Future<void> requestPermission() async {
     if (!Platform.isAndroid) return;
     try {
-      final android = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       await android?.requestNotificationsPermission();
     } catch (_) {
       // The app remains usable if the user blocks notifications.
@@ -138,7 +140,9 @@ class LocalShareNotifications {
 String notificationBodyFor(ChatMessage message) {
   if (message.kind == ChatMessageKind.file) {
     final name = _cleanPreview(message.fileName ?? 'ملف', maxLength: 120);
-    final size = message.fileSize == null ? '' : ' • ${formatBytes(message.fileSize!)}';
+    final size = message.fileSize == null
+        ? ''
+        : ' • ${formatBytes(message.fileSize!)}';
     return '📎 $name$size';
   }
 

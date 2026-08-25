@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -5,9 +6,11 @@ import 'package:flutter/services.dart';
 
 import 'local_share_service.dart';
 import 'models.dart';
+import 'notifications.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await LocalShareNotifications.instance.initialize();
   runApp(const LocalShareApp());
 }
 
@@ -57,19 +60,57 @@ class LocalShareShell extends StatefulWidget {
   State<LocalShareShell> createState() => _LocalShareShellState();
 }
 
-class _LocalShareShellState extends State<LocalShareShell> {
+class _LocalShareShellState extends State<LocalShareShell>
+    with WidgetsBindingObserver {
   late final LocalShareService service;
+  late final LocalShareNotifications notifications;
   String? selectedPeerId;
+  String? _pendingNotificationPeerId;
+  AppLifecycleState _appLifecycle = AppLifecycleState.resumed;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    notifications = LocalShareNotifications.instance;
     service = LocalShareService();
+    service.onIncomingMessage = _handleIncomingMessage;
+    notifications.attachPeerHandler(_openPeerFromNotification);
     service.init();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(notifications.requestPermission());
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appLifecycle = state;
+  }
+
+  void _handleIncomingMessage(ChatMessage message) {
+    final isViewingConversation =
+        _appLifecycle == AppLifecycleState.resumed &&
+        selectedPeerId == message.peerId;
+    if (!isViewingConversation) {
+      unawaited(notifications.showIncoming(message));
+    }
+  }
+
+  void _openPeerFromNotification(String peerId) {
+    _pendingNotificationPeerId = peerId;
+    if (!mounted || !service.initialized || service.peerFor(peerId) == null)
+      return;
+    setState(() {
+      selectedPeerId = peerId;
+      _pendingNotificationPeerId = null;
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    service.onIncomingMessage = null;
+    notifications.detachPeerHandler(_openPeerFromNotification);
     service.dispose();
     super.dispose();
   }
@@ -94,6 +135,19 @@ class _LocalShareShellState extends State<LocalShareShell> {
             body: Center(child: CircularProgressIndicator()),
           );
         }
+        final pendingPeerId = _pendingNotificationPeerId;
+        if (pendingPeerId != null &&
+            service.peerFor(pendingPeerId) != null &&
+            selectedPeerId != pendingPeerId) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() {
+              selectedPeerId = pendingPeerId;
+              _pendingNotificationPeerId = null;
+            });
+          });
+        }
+
         if (service.startupError != null) {
           return Scaffold(
             body: Center(

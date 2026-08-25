@@ -41,6 +41,8 @@ class LocalShareService extends ChangeNotifier {
   final Map<String, List<DateTime>> _pairFailures = {};
   final Map<String, DateTime> _recentNonces = {};
 
+  void Function(ChatMessage message)? onIncomingMessage;
+
   HttpServer? _server;
   RawDatagramSocket? _discoverySocket;
   Timer? _broadcastTimer;
@@ -626,20 +628,20 @@ class LocalShareService extends ChangeNotifier {
       (message) => message.peerId == peer.deviceId && message.id == id,
     );
     if (!duplicate) {
-      _messages.add(
-        ChatMessage(
-          id: id,
-          peerId: peer.deviceId,
-          peerName: peer.name,
-          kind: kind,
-          direction: ChatMessageDirection.receive,
-          sentAt: DateTime.fromMillisecondsSinceEpoch(timestamp),
-          text: text,
-          deliveryStatus: ChatDeliveryStatus.delivered,
-        ),
+      final incomingMessage = ChatMessage(
+        id: id,
+        peerId: peer.deviceId,
+        peerName: peer.name,
+        kind: kind,
+        direction: ChatMessageDirection.receive,
+        sentAt: DateTime.fromMillisecondsSinceEpoch(timestamp),
+        text: text,
+        deliveryStatus: ChatDeliveryStatus.delivered,
       );
+      _messages.add(incomingMessage);
       _trimMessageHistory(peer.deviceId);
       notifyListeners();
+      onIncomingMessage?.call(incomingMessage);
     }
     final ack = await _crypto.macString(
       _peerKey(peer),
@@ -825,6 +827,7 @@ class LocalShareService extends ChangeNotifier {
       incomingMessage.deliveryStatus = ChatDeliveryStatus.delivered;
       incomingMessage.error = null;
       notifyListeners();
+      onIncomingMessage?.call(incomingMessage);
 
       final ack = await _crypto.macString(
         sharedKey,
