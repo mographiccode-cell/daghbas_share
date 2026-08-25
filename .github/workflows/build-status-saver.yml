@@ -159,7 +159,7 @@ jobs:
           grep -q "package: name='com.mographiccode.status_saver'" "$RUNNER_TEMP/badging.txt"
           grep -q "sdkVersion:'29'" "$RUNNER_TEMP/badging.txt"
           grep -q "application-label:'حافظ الحالات'" "$RUNNER_TEMP/badging.txt"
-          grep -q "application-icon-640:'res/" "$RUNNER_TEMP/badging.txt"
+          grep -Eq "application: label='حافظ الحالات' icon='res/.+'" "$RUNNER_TEMP/badging.txt"
           ! grep -Eq 'MANAGE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_CONTACTS|READ_SMS|CAMERA|RECORD_AUDIO|ACCESS_FINE_LOCATION|ACCESS_COARSE_LOCATION|QUERY_ALL_PACKAGES|android.permission.INTERNET' "$RUNNER_TEMP/permissions.txt"
 
       - name: Create temporary release signing key
