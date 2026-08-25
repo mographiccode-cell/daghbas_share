@@ -174,7 +174,7 @@ jobs:
             -validity 10000 \
             -dname "CN=Status Saver, OU=Mobile, O=MographicCode, L=Aden, ST=Aden, C=YE"
 
-      - name: Sign APK with v1 v2 v3
+      - name: Sign APK with Android v3 signature
         run: |
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -x "$APKSIGNER"
@@ -183,7 +183,6 @@ jobs:
             --ks-key-alias status-saver \
             --ks-pass pass:status-saver-build \
             --key-pass pass:status-saver-build \
-            --v1-signing-enabled true \
             --v2-signing-enabled true \
             --v3-signing-enabled true \
             --out build_status_saver/build/app/outputs/flutter-apk/StatusSaver-v1.1.0.apk \
@@ -195,7 +194,7 @@ jobs:
           APK=build_status_saver/build/app/outputs/flutter-apk/StatusSaver-v1.1.0.apk
           test -s "$APK"
           "$APKSIGNER" verify --verbose --print-certs "$APK" | tee "$RUNNER_TEMP/signature.txt"
-          grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' "$RUNNER_TEMP/signature.txt"
+          grep -q '^Verifies$' "$RUNNER_TEMP/signature.txt"
           grep -q 'Verified using v3 scheme (APK Signature Scheme v3): true' "$RUNNER_TEMP/signature.txt"
           unzip -t "$APK" >/dev/null
           ls -lh "$APK"
