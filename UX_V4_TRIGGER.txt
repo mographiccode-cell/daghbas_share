@@ -1,2 +1,2 @@
 LocalShare UX v4 validation trigger.
-Run: push validation after PR permission check.
+Run: final v5 validation with incoming file progress.
