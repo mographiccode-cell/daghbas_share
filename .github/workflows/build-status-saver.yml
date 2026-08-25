@@ -1,0 +1,75 @@
+name: Build WhatsApp Status Saver APK
+
+on:
+  push:
+    branches:
+      - status-saver-build-20260825
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.0'
+          channel: stable
+          cache: true
+
+      - name: Create clean Flutter Android project
+        run: |
+          rm -rf build_status_saver
+          flutter create --platforms=android --org=com.mographiccode --project-name=status_saver build_status_saver
+          rm -f build_status_saver/test/widget_test.dart
+
+      - name: Apply Status Saver source
+        run: |
+          cp status_saver_ci/lib/main.dart build_status_saver/lib/main.dart
+          cp status_saver_ci/test/status_item_test.dart build_status_saver/test/status_item_test.dart
+          cp status_saver_ci/android/MainActivity.kt build_status_saver/android/app/src/main/kotlin/com/mographiccode/status_saver/MainActivity.kt
+          cp status_saver_ci/android/AndroidManifest.xml build_status_saver/android/app/src/main/AndroidManifest.xml
+
+      - name: Format Dart
+        working-directory: build_status_saver
+        run: dart format lib test
+
+      - name: Flutter analyze
+        working-directory: build_status_saver
+        run: flutter analyze
+
+      - name: Flutter tests
+        working-directory: build_status_saver
+        run: flutter test
+
+      - name: Build release APK
+        working-directory: build_status_saver
+        run: flutter build apk --release
+
+      - name: Verify APK
+        run: |
+          test -s build_status_saver/build/app/outputs/flutter-apk/app-release.apk
+          ls -lh build_status_saver/build/app/outputs/flutter-apk/app-release.apk
+          sha256sum build_status_saver/build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StatusSaver-APK
+          path: build_status_saver/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 7
