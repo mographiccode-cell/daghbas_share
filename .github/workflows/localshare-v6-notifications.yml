@@ -1,0 +1,205 @@
+name: LocalShare 1.3.1 Notifications Validation
+
+on:
+  push:
+    branches: [localshare-ux-v4]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: localshare-ux-v4
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Apply notifications integration and validate source
+        shell: bash
+        run: |
+          if ! grep -q "_handleIncomingMessage(ChatMessage message)" flutter_local_share/lib/main.dart; then
+            python flutter_local_share/tools/apply_notifications_v6.py
+          fi
+          cd flutter_local_share
+          flutter pub get
+          dart format lib test
+          flutter analyze --fatal-warnings --no-fatal-infos
+          flutter test
+      - name: Commit validated source and lockfile
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add flutter_local_share/lib flutter_local_share/test flutter_local_share/pubspec.lock
+          if git diff --cached --quiet; then
+            echo "No generated source changes"
+            exit 0
+          fi
+          git commit -m "feat(localshare): integrate Android and Windows message notifications"
+          git push origin HEAD:localshare-ux-v4
+
+  android:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: localshare-ux-v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android project
+        shell: bash
+        run: |
+          rm -rf generated
+          flutter create --org com.mographiccode --project-name local_share --platforms=android generated
+          rm -rf generated/lib generated/test
+          cp -r flutter_local_share/lib generated/lib
+          cp -r flutter_local_share/test generated/test
+          cp flutter_local_share/pubspec.yaml generated/pubspec.yaml
+          cp flutter_local_share/overrides/AndroidManifest.xml generated/android/app/src/main/AndroidManifest.xml
+          cp flutter_local_share/overrides/MainActivity.kt generated/android/app/src/main/kotlin/com/mographiccode/local_share/MainActivity.kt
+          python -m pip install --quiet pillow
+          python flutter_local_share/tools/generate_localshare_icon.py localshare_icon.png
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          src=Image.open('localshare_icon.png').convert('RGBA')
+          for dpi,size in [('mdpi',48),('hdpi',72),('xhdpi',96),('xxhdpi',144),('xxxhdpi',192)]:
+              p=Path(f'generated/android/app/src/main/res/mipmap-{dpi}/ic_launcher.png')
+              p.parent.mkdir(parents=True,exist_ok=True)
+              src.resize((size,size),Image.Resampling.LANCZOS).save(p)
+
+          gradle=Path('generated/android/app/build.gradle.kts')
+          text=gradle.read_text(encoding='utf-8')
+          if 'isCoreLibraryDesugaringEnabled = true' not in text:
+              text=text.replace(
+                  'compileOptions {',
+                  'compileOptions {\n        isCoreLibraryDesugaringEnabled = true',
+                  1,
+              )
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' not in text:
+              if 'dependencies {' in text:
+                  text=text.replace(
+                      'dependencies {',
+                      'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")',
+                      1,
+                  )
+              else:
+                  text += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+          gradle.write_text(text,encoding='utf-8')
+          PY
+      - name: Analyze test and build Android APK
+        working-directory: generated
+        shell: bash
+        run: |
+          flutter pub get
+          flutter analyze --fatal-warnings --no-fatal-infos
+          flutter test
+          flutter build apk --release
+          unzip -t build/app/outputs/flutter-apk/app-release.apk >/dev/null
+          grep -q 'POST_NOTIFICATIONS' android/app/src/main/AndroidManifest.xml
+          cp build/app/outputs/flutter-apk/app-release.apk ../LocalShare-1.3.1-Android.apk
+          cd ..
+          sha256sum LocalShare-1.3.1-Android.apk > LocalShare-1.3.1-Android.apk.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LocalShare-1.3.1-Android
+          path: |
+            LocalShare-1.3.1-Android.apk
+            LocalShare-1.3.1-Android.apk.sha256
+          if-no-files-found: error
+
+  windows:
+    needs: prepare
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: localshare-ux-v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Windows project and icon
+        shell: pwsh
+        run: |
+          if (Test-Path generated) { Remove-Item generated -Recurse -Force }
+          flutter create --org com.mographiccode --project-name local_share --platforms=windows generated
+          Remove-Item generated/lib -Recurse -Force
+          Remove-Item generated/test -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item flutter_local_share/lib generated/lib -Recurse
+          Copy-Item flutter_local_share/test generated/test -Recurse
+          Copy-Item flutter_local_share/pubspec.yaml generated/pubspec.yaml -Force
+          python flutter_local_share/tools/patch_windows_temp_cleanup.py generated/windows/runner/main.cpp
+          python -m pip install --quiet pillow
+          python flutter_local_share/tools/generate_localshare_icon.py localshare_icon.png
+          @'
+          from pathlib import Path
+          from PIL import Image
+          src=Image.open('localshare_icon.png').convert('RGBA')
+          src.save(Path('generated/windows/runner/resources/app_icon.ico'),sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+          '@ | Set-Content icon_build.py -Encoding UTF8
+          python icon_build.py
+      - name: Analyze test and build Windows
+        working-directory: generated
+        shell: pwsh
+        run: |
+          flutter pub get
+          flutter analyze --fatal-warnings --no-fatal-infos
+          flutter test
+          flutter build windows --release
+      - name: Build Windows installer with desktop shortcut
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          $release=(Resolve-Path 'generated/build/windows/x64/runner/Release').Path
+          $icon=(Resolve-Path 'generated/windows/runner/resources/app_icon.ico').Path
+          $iss=@"
+          [Setup]
+          AppId={{8D2D488C-246B-4BDC-8C24-7B10A65B9649}
+          AppName=LocalShare
+          AppVersion=1.3.1
+          AppPublisher=MographicCode LocalShare
+          DefaultDirName={autopf}\LocalShare
+          DefaultGroupName=LocalShare
+          OutputDir=$($PWD.Path)\artifacts
+          OutputBaseFilename=LocalShare-1.3.1-Windows-Setup
+          SetupIconFile=$icon
+          Compression=lzma2
+          SolidCompression=yes
+          WizardStyle=modern
+          ArchitecturesAllowed=x64compatible
+          ArchitecturesInstallIn64BitMode=x64compatible
+          PrivilegesRequired=admin
+          UninstallDisplayIcon={app}\local_share.exe
+          [Files]
+          Source: "$release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+          [Icons]
+          Name: "{autoprograms}\LocalShare"; Filename: "{app}\local_share.exe"; WorkingDir: "{app}"; IconFilename: "{app}\local_share.exe"
+          Name: "{autodesktop}\LocalShare"; Filename: "{app}\local_share.exe"; WorkingDir: "{app}"; IconFilename: "{app}\local_share.exe"
+          [Run]
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""LocalShare TCP"" dir=in action=allow protocol=TCP localport=40404 profile=private"; Flags: runhidden
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""LocalShare UDP Discovery"" dir=in action=allow protocol=UDP localport=40405 profile=private"; Flags: runhidden
+          [UninstallRun]
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare TCP"""; Flags: runhidden; RunOnceId: "RemoveLocalShareTcp"
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare UDP Discovery"""; Flags: runhidden; RunOnceId: "RemoveLocalShareUdp"
+          "@
+          Set-Content installer.iss $iss -Encoding UTF8
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-FileHash artifacts/LocalShare-1.3.1-Windows-Setup.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  LocalShare-1.3.1-Windows-Setup.exe" } | Set-Content artifacts/LocalShare-1.3.1-Windows-Setup.exe.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LocalShare-1.3.1-Windows
+          path: |
+            artifacts/LocalShare-1.3.1-Windows-Setup.exe
+            artifacts/LocalShare-1.3.1-Windows-Setup.exe.sha256
+          if-no-files-found: error
