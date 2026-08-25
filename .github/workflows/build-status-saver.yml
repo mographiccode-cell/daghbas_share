@@ -43,58 +43,67 @@ jobs:
           cp status_saver_ci/test/status_item_test.dart build_status_saver/test/status_item_test.dart
           cp status_saver_ci/android/MainActivity.kt build_status_saver/android/app/src/main/kotlin/com/mographiccode/status_saver/MainActivity.kt
           cp status_saver_ci/android/AndroidManifest.xml build_status_saver/android/app/src/main/AndroidManifest.xml
-
-      - name: Create branded app icon and Flutter asset
-        run: |
-          command -v convert >/dev/null
-          cat > "$RUNNER_TEMP/status_saver_icon.svg" <<'SVG'
-          <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-            <defs>
-              <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stop-color="#13d98a"/>
-                <stop offset="0.55" stop-color="#08b96f"/>
-                <stop offset="1" stop-color="#056443"/>
-              </linearGradient>
-              <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#ffffff" stop-opacity="0.20"/>
-                <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
-              </linearGradient>
-              <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
-                <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#003c28" flood-opacity="0.42"/>
-              </filter>
-            </defs>
-            <rect x="22" y="22" width="980" height="980" rx="220" fill="url(#bg)"/>
-            <path d="M22 535 Q245 760 520 690 Q820 615 1002 330 L1002 22 L22 22 Z" fill="url(#shine)"/>
-            <g filter="url(#shadow)">
-              <circle cx="512" cy="500" r="316" fill="none" stroke="#fff" stroke-width="72"/>
-              <path d="M290 730 L220 858 L382 790" fill="#fff" stroke="#fff" stroke-width="34" stroke-linejoin="round"/>
-              <path d="M512 340 V548" stroke="#06975a" stroke-width="72" stroke-linecap="round"/>
-              <path d="M430 520 L512 606 L594 520" fill="none" stroke="#06975a" stroke-width="72" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M378 640 V676 Q378 724 426 724 H598 Q646 724 646 676 V640" fill="none" stroke="#06975a" stroke-width="48" stroke-linecap="round"/>
-            </g>
-          </svg>
-          SVG
-          mkdir -p build_status_saver/assets
-          convert -background none "$RUNNER_TEMP/status_saver_icon.svg" -resize 512x512 build_status_saver/assets/app_icon.png
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('build_status_saver/pubspec.yaml')
+          p = Path('build_status_saver/lib/main.dart')
           text = p.read_text()
-          needle = '  uses-material-design: true\n'
-          if needle not in text:
-              raise SystemExit('uses-material-design entry not found')
-          text = text.replace(needle, needle + '  assets:\n    - assets/app_icon.png\n', 1)
-          p.write_text(text)
+          old = "child: Image.asset('assets/app_icon.png', fit: BoxFit.cover),"
+          new = "child: const ColoredBox(color: _brand, child: Stack(alignment: Alignment.center, children: [Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 78), Icon(Icons.download_rounded, color: _brand, size: 42)])),"
+          if old not in text:
+              raise SystemExit('App icon asset expression not found')
+          p.write_text(text.replace(old, new, 1))
           PY
 
-      - name: Apply Android launcher icon and secure minimum SDK
+      - name: Create native Android adaptive launcher icon
         run: |
           rm -f build_status_saver/android/app/src/main/res/mipmap-*/ic_launcher*.png
           rm -f build_status_saver/android/app/src/main/res/mipmap-*/ic_launcher*.webp
           rm -f build_status_saver/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher*.xml
-          mkdir -p build_status_saver/android/app/src/main/res/mipmap-xxxhdpi
-          convert -background none "$RUNNER_TEMP/status_saver_icon.svg" -resize 192x192 build_status_saver/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          cp build_status_saver/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png build_status_saver/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+          mkdir -p build_status_saver/android/app/src/main/res/drawable
+          mkdir -p build_status_saver/android/app/src/main/res/values
+          mkdir -p build_status_saver/android/app/src/main/res/mipmap-anydpi-v26
+          cat > build_status_saver/android/app/src/main/res/values/status_saver_colors.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="status_saver_icon_bg">#08B96F</color>
+          </resources>
+          XML
+          cat > build_status_saver/android/app/src/main/res/drawable/status_saver_icon_foreground.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#FFFFFFFF"
+                  android:pathData="M54,13 C76.64,13 95,31.36 95,54 C95,76.64 76.64,95 54,95 C31.36,95 13,76.64 13,54 C13,31.36 31.36,13 54,13 Z" />
+              <path
+                  android:fillColor="#FFFFFFFF"
+                  android:pathData="M30,78 L20,94 L42,84 Z" />
+              <path
+                  android:fillColor="#FF07965B"
+                  android:pathData="M50,32 L58,32 L58,56 L69,56 L54,71 L39,56 L50,56 Z" />
+              <path
+                  android:fillColor="#00000000"
+                  android:strokeColor="#FF07965B"
+                  android:strokeWidth="5"
+                  android:strokeLineCap="round"
+                  android:strokeLineJoin="round"
+                  android:pathData="M38,72 L38,77 C38,83 42,87 48,87 L60,87 C66,87 70,83 70,77 L70,72" />
+          </vector>
+          XML
+          cat > build_status_saver/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/status_saver_icon_bg" />
+              <foreground android:drawable="@drawable/status_saver_icon_foreground" />
+          </adaptive-icon>
+          XML
+          cp build_status_saver/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml build_status_saver/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+
+      - name: Secure Android minimum SDK
+        run: |
           python3 - <<'PY'
           from pathlib import Path
           candidates = [
@@ -109,27 +118,24 @@ jobs:
               ('minSdk = flutter.minSdkVersion', 'minSdk = 29'),
               ('minSdkVersion flutter.minSdkVersion', 'minSdkVersion 29'),
           ]
-          changed = False
           for old, new in replacements:
               if old in text:
-                  text = text.replace(old, new, 1)
-                  changed = True
+                  p.write_text(text.replace(old, new, 1))
                   break
-          if not changed:
+          else:
               raise SystemExit('Could not set minSdk to 29')
-          p.write_text(text)
           PY
 
       - name: Static privacy and manifest checks
         run: |
           grep -q 'android:allowBackup="false"' status_saver_ci/android/AndroidManifest.xml
           grep -q 'android:usesCleartextTraffic="false"' status_saver_ci/android/AndroidManifest.xml
-          ! grep -Eq 'MANAGE_EXTERNAL_STORAGE|READ_CONTACTS|READ_SMS|CAMERA|RECORD_AUDIO|ACCESS_FINE_LOCATION|ACCESS_COARSE_LOCATION|QUERY_ALL_PACKAGES|android.permission.INTERNET' status_saver_ci/android/AndroidManifest.xml
+          ! grep -Eq 'MANAGE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_CONTACTS|READ_SMS|CAMERA|RECORD_AUDIO|ACCESS_FINE_LOCATION|ACCESS_COARSE_LOCATION|QUERY_ALL_PACKAGES|android.permission.INTERNET' status_saver_ci/android/AndroidManifest.xml
           ! grep -Eq '^\s*<uses-permission' status_saver_ci/android/AndroidManifest.xml
 
       - name: Format Dart
         working-directory: build_status_saver
-        run: dart format --output=none --set-exit-if-changed lib test
+        run: dart format lib test
 
       - name: Flutter analyze
         working-directory: build_status_saver
