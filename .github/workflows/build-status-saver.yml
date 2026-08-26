@@ -43,10 +43,20 @@ jobs:
           cp status_saver_ci/test/status_item_test.dart build_status_saver/test/status_item_test.dart
           cp status_saver_ci/android/MainActivity.kt build_status_saver/android/app/src/main/kotlin/com/mographiccode/status_saver/MainActivity.kt
           cp status_saver_ci/android/AndroidManifest.xml build_status_saver/android/app/src/main/AndroidManifest.xml
+          python3 -m pip install --quiet pillow
           mkdir -p build_status_saver/assets
-          cp status_saver_ci/assets/app_icon.png build_status_saver/assets/app_icon.png
           python3 - <<'PY'
           from pathlib import Path
+          from PIL import Image, ImageChops
+
+          source = Path('status_saver_ci/assets/app_icon.png')
+          target = Path('build_status_saver/assets/app_icon.png')
+          original = Image.open(source).convert('RGBA')
+          original.save(target, format='PNG', optimize=False)
+          rebuilt = Image.open(target).convert('RGBA')
+          if original.size != rebuilt.size or ImageChops.difference(original, rebuilt).getbbox() is not None:
+              raise SystemExit('Launcher icon pixel verification failed')
+
           p = Path('build_status_saver/pubspec.yaml')
           text = p.read_text()
           needle = '  uses-material-design: true\n'
@@ -63,10 +73,11 @@ jobs:
           rm -f build_status_saver/android/app/src/main/res/mipmap-*/ic_launcher*.webp
           rm -f build_status_saver/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher*.xml
           mkdir -p build_status_saver/android/app/src/main/res/mipmap-xxxhdpi
-          cp status_saver_ci/assets/app_icon.png build_status_saver/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          cp status_saver_ci/assets/app_icon.png build_status_saver/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+          cp build_status_saver/assets/app_icon.png build_status_saver/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          cp build_status_saver/assets/app_icon.png build_status_saver/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
           test -s build_status_saver/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          cmp status_saver_ci/assets/app_icon.png build_status_saver/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          cmp build_status_saver/assets/app_icon.png build_status_saver/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          file build_status_saver/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png | grep -q 'RGBA'
 
       - name: Secure Android minimum SDK
         run: |
