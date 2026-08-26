@@ -44,7 +44,9 @@ jobs:
           cp status_saver_ci/android/MainActivity.kt build_status_saver/android/app/src/main/kotlin/com/mographiccode/status_saver/MainActivity.kt
           cp status_saver_ci/android/AndroidManifest.xml build_status_saver/android/app/src/main/AndroidManifest.xml
           mkdir -p build_status_saver/assets
-          base64 --decode status_saver_ci/assets/app_icon_exact.b64 > "$RUNNER_TEMP/exact_icon_palette.png"
+          test "$(find status_saver_ci/assets/icon_chunks -maxdepth 1 -type f -name '*.txt' | wc -l)" -eq 17
+          cat status_saver_ci/assets/icon_chunks/*.txt > "$RUNNER_TEMP/exact_icon.b64"
+          base64 --decode "$RUNNER_TEMP/exact_icon.b64" > "$RUNNER_TEMP/exact_icon_palette.png"
           echo "b305ad53a78b3c440ec268eda4e2e5a37261e628e2a4831b39d5054ab54ab773  $RUNNER_TEMP/exact_icon_palette.png" | sha256sum -c -
           python3 -m pip install --quiet pillow
           python3 - <<'PY'
