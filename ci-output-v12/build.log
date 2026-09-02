@@ -1,11 +1,11 @@
 === TOOLCHAIN ===
 Flutter 3.47.0 • channel stable • https://github.com/flutter/flutter.git
-Framework • revision 4cf2416426 (11 days ago) • 2026-08-11 11:53:49 -0700
-Engine • hash 59d54a2b2896a6bbf356c94b7fac7b9e235bdacd (revision 5f77625673) (10 days ago) • 2026-08-11 16:38:36.000Z
+Framework • revision 4cf2416426 (3 weeks ago) • 2026-08-11 11:53:49 -0700
+Engine • hash 59d54a2b2896a6bbf356c94b7fac7b9e235bdacd (revision 5f77625673) (22 days ago) • 2026-08-11 16:38:36.000Z
 Tools • Dart 3.13.0 • DevTools 2.60.0
-openjdk version "17.0.20" 2026-07-21
-OpenJDK Runtime Environment Temurin-17.0.20+8 (build 17.0.20+8)
-OpenJDK 64-Bit Server VM Temurin-17.0.20+8 (build 17.0.20+8, mixed mode, sharing)
+openjdk version "17.0.20.1" 2026-08-18
+OpenJDK Runtime Environment Temurin-17.0.20.1+1 (build 17.0.20.1+1)
+OpenJDK 64-Bit Server VM Temurin-17.0.20.1+1 (build 17.0.20.1+1, mixed mode, sharing)
 === SOURCE INTEGRITY ===
 waqt_v12.zip: OK
 Archive:  waqt_v12.zip
@@ -188,7 +188,7 @@ an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/mig
 If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
 Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 10340 bytes (99.4% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
 Caught exception: Already watching path: /home/runner/work/daghbas_share/daghbas_share/app/android
-Running Gradle task 'assembleRelease'...                          238.3s
+Running Gradle task 'assembleRelease'...                          275.4s
 ✓ Built build/app/outputs/flutter-apk/app-release.apk (56.7MB)
 === APK SIGNATURE VERIFY ===
 Verifies
@@ -200,5 +200,5 @@ Verified using v3.2 scheme (APK Signature Scheme v3.2): false
 Verified using v4 scheme (APK Signature Scheme v4): false
 Verified for SourceStamp: false
 Number of signers: 1
-80992624faaef792350cb7541be04768f6896e8e3e98ddcbc23a0cf3ac2a2617  ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk
--rw-r--r-- 1 runner runner 55M Aug 22 09:35 ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk
+eb8e8adbcc1244f059a1ab2c0a58e07b750981042a67179e5dbdf5d998ba0da8  ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk
+-rw-r--r-- 1 runner runner 55M Sep  2 20:31 ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk
