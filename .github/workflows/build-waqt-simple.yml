@@ -34,11 +34,20 @@ jobs:
         shell: bash
         run: |
           set -e
-          rm -rf app unpack ci-output-simple source.zip
+          rm -rf app unpack ci-output-simple source.zip reconstructed.b64
           mkdir -p ci-output-simple unpack
           echo '=== SOURCE ==='
-          test "$(wc -c < ci/waqt_simple/source.b64)" -eq 52472
-          base64 --decode ci/waqt_simple/source.b64 > source.zip
+          cat \
+            ci/waqt_simple3/part_00 \
+            ci/waqt_simple3/part_01a ci/waqt_simple3/part_01b \
+            ci/waqt_simple3/part_02 ci/waqt_simple3/part_03 ci/waqt_simple3/part_04 \
+            ci/waqt_simple3/part_05 ci/waqt_simple3/part_06 ci/waqt_simple3/part_07 \
+            ci/waqt_simple3/part_08 ci/waqt_simple3/part_09 ci/waqt_simple3/part_10 \
+            ci/waqt_simple3/part_11 ci/waqt_simple3/part_12 ci/waqt_simple3/part_13 \
+            ci/waqt_simple3/part_14 ci/waqt_simple3/part_15 ci/waqt_simple3/part_16 \
+            ci/waqt_simple3/part_17 > reconstructed.b64
+          test "$(wc -c < reconstructed.b64)" -eq 52472
+          base64 --decode reconstructed.b64 > source.zip
           echo 'c6cfe82a761eb36f98744406828e284c7878342f5d983f958cfcec8617a90383  source.zip' | sha256sum --check
           unzip -t source.zip
           unzip -q source.zip -d unpack
