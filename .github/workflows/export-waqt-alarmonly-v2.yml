@@ -1,0 +1,29 @@
+name: Export WAQT Alarm Only v2 APK
+
+on:
+  push:
+    branches:
+      - waqt-alarmonly-v2-build
+    paths:
+      - '.github/workflows/export-waqt-alarmonly-v2.yml'
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: waqt-alarmonly-v2-build
+      - name: Verify APK exists
+        run: |
+          test -s ci-output-alarmonly/WAQT-Alarm-Only-v2.0.apk
+          sha256sum ci-output-alarmonly/WAQT-Alarm-Only-v2.0.apk | tee ci-output-alarmonly/WAQT-Alarm-Only-v2.0.apk.sha256
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: WAQT-Alarm-Only-v2-APK
+          path: |
+            ci-output-alarmonly/WAQT-Alarm-Only-v2.0.apk
+            ci-output-alarmonly/WAQT-Alarm-Only-v2.0.apk.sha256
+          compression-level: 0
+          retention-days: 30
