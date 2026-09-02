@@ -1,0 +1,118 @@
+=== SOURCE ===
+waqt_v12.zip: OK
+=== RINGTONES ===
+=== SCAFFOLD ===
+Creating project ....
+Resolving dependencies...
+Downloading packages...
+Got dependencies.
+Wrote 35 files.
+
+All done!
+You can find general documentation for Flutter at: https://docs.flutter.dev/
+Detailed API documentation is available at: https://api.flutter.dev/
+If you prefer video documentation, consider: https://www.youtube.com/c/flutterdev
+
+In order to run your application, type:
+
+  $ flutter run
+
+Your application code is in ./lib/main.dart.
+
+=== ALARM ONLY OVERRIDES ===
+Alarm-only AppState patch applied
+=== VERIFY SCOPE ===
+Resolving dependencies...
+Downloading packages...
++ args 2.7.0
++ dbus 0.7.15
++ equatable 2.1.0
++ ffi 2.2.0
+< flutter_lints 5.0.0 (was 6.0.0) (6.0.0 available)
++ flutter_local_notifications 19.5.0 (22.3.0 available)
++ flutter_local_notifications_linux 6.0.0 (8.0.1 available)
++ flutter_local_notifications_platform_interface 9.1.0 (12.2.0 available)
++ flutter_local_notifications_windows 1.0.3 (3.1.1 available)
++ flutter_localizations 0.0.0 from sdk flutter
++ flutter_timezone 5.1.0
++ flutter_web_plugins 0.0.0 from sdk flutter
++ http 1.6.0
++ http_parser 4.1.2
++ intl 0.20.3
+< lints 5.1.1 (was 6.1.0) (6.1.0 available)
++ logging 1.3.0
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
++ nested 1.0.0
+  path 1.9.1 (from transitive dependency to direct dependency)
++ petitparser 7.0.2
++ platform 3.1.6
++ plugin_platform_interface 2.1.8
++ provider 6.1.5+1
++ sensors_plus 6.1.2 (7.1.0 available)
++ sensors_plus_platform_interface 2.0.2
++ sqflite 2.4.3
++ sqflite_android 2.4.3
++ sqflite_common 2.5.11
++ sqflite_darwin 2.4.3+1
++ sqflite_platform_interface 2.4.1
++ synchronized 3.4.1+2
+  test_api 0.7.12 (0.7.13 available)
++ timezone 0.10.1 (0.11.1 available)
++ typed_data 1.4.0
+  vector_math 2.4.0 (2.4.2 available)
++ web 1.1.1
++ xdg_directories 1.1.0
++ xml 6.6.1 (7.0.1 available)
+Changed 36 dependencies!
+13 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Upgrading analysis_options.yaml to exclude build and platform directories.
+=== ANALYZE ===
+Analyzing app...                                                
+No issues found! (ran in 9.6s)
+=== TEST ===
+
+::group::✅ Passing tests
+✅ one-time alarm does not reappear after its date
+✅ weekday alarm only schedules selected weekdays
+✅ medication supports every 2 days with multiple daily doses
+✅ task every 3 days stays anchored to start date
+::endgroup::
+
+🎉 4 tests passed.
+=== BUILD ===
+Running Gradle task 'assembleRelease'...                        
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): flutter_timezone, sensors_plus
+Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
+
+Please check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.
+If no such version exists, report the issue to the plugin. If necessary, here is a guide on filing
+an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
+
+If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 4164 bytes (99.7% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Caught exception: Already watching path: /home/runner/work/daghbas_share/daghbas_share/app/android
+Running Gradle task 'assembleRelease'...                          273.2s
+✓ Built build/app/outputs/flutter-apk/app-release.apk (54.3MB)
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): false
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v3.2 scheme (APK Signature Scheme v3.2): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+V2 Signer: certificate DN: CN=WAQT, O=WAQT, C=SA
+V2 Signer: certificate SHA-256 digest: 69931f3ef4a22fe48805c33f82e1cc42aeb1c890bbb923c5943f70fc89616d2f
+V2 Signer: certificate SHA-1 digest: e8af1b4221299be3a2fdaaa5b5046cc4c6ca95e5
+V2 Signer: certificate MD5 digest: 7dd3d7ccfe5cfb528ce5e89794f41ef8
+V2 Signer: key algorithm: RSA
+V2 Signer: key size (bits): 2048
+V2 Signer: public key SHA-256 digest: f8c8532b5406790c8ebebc3f87abb9b509e20d864e4f6d6072f7766a949e26c3
+V2 Signer: public key SHA-1 digest: 1dca0197aa8223b189e5164d685dc86e7bb7a4d0
+V2 Signer: public key MD5 digest: dbdec19dd78cb46c2cabca6cf61ea556
+e262be55b5cbe1f3e5e1ea9cc153bc53739635e049d5696e884504da020415bb  ci-output-alarm-only/WAQT-Alarm-Only-v2.0.apk
+	 SHA256: 69:93:1F:3E:F4:A2:2F:E4:88:05:C3:3F:82:E1:CC:42:AE:B1:C8:90:BB:B9:23:C5:94:3F:70:FC:89:61:6D:2F
+-rw-r--r-- 1 runner runner 52M Sep  2 21:12 ci-output-alarm-only/WAQT-Alarm-Only-v2.0.apk
