@@ -98,10 +98,10 @@ jobs:
             test ! -e app/lib/screens/home
             test ! -e app/lib/screens/shell_screen.dart
             grep -q "version: 1.3.0+4" app/pubspec.yaml
-            grep -q "كل يوم" app/lib/screens/alarms/alarm_editor_screen.dart
+            grep -q "WeekdaySelector" app/lib/screens/alarms/alarm_editor_screen.dart
             grep -q "الغفوة" app/lib/screens/alarms/alarm_editor_screen.dart
             grep -q "النغمة" app/lib/screens/alarms/alarm_editor_screen.dart
-            grep -q "تم ضبط المنب" app/lib/screens/alarms/alarms_screen.dart
+            grep -q "تم ضبط المنب" app/lib/screens/alarms/alarm_editor_screen.dart
 
             cd app
             echo '=== PUB GET ==='
