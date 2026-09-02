@@ -1,0 +1,2 @@
+SUCCESS
+pipeline_exit=0

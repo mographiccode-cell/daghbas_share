@@ -1,0 +1,181 @@
+name: Build WAQT Simple Alarm APK
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout simple alarm branch
+        uses: actions/checkout@v4
+        with:
+          ref: waqt-simple-alarm-build
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.0'
+          channel: stable
+          cache: true
+
+      - name: Verify, analyze, test and build alarm-only APK
+        shell: bash
+        run: |
+          rm -rf app source ci-output-simple waqt_simple.b64 waqt_simple.zip
+          mkdir -p ci-output-simple
+          set +e
+          (
+            set -e
+            echo '=== TOOLCHAIN ==='
+            flutter --version
+            java -version
+
+            echo '=== SOURCE INTEGRITY ==='
+            cat \
+              ci/simple/waqt_simple.b64.00 ci/simple/waqt_simple.b64.01 \
+              ci/simple/waqt_simple.b64.02 ci/simple/waqt_simple.b64.03 \
+              ci/simple/waqt_simple.b64.04 ci/simple/waqt_simple.b64.05a \
+              ci/simple/waqt_simple.b64.05b ci/simple/waqt_simple.b64.06 \
+              ci/simple/waqt_simple.b64.07 ci/simple/waqt_simple.b64.08 > waqt_simple.b64
+            test "$(wc -c < waqt_simple.b64)" -eq 67872
+            base64 --decode waqt_simple.b64 > waqt_simple.zip
+            echo '4e1dd7b633453068d8d87b15f1549f3616724d166b4d815f28b85db9a0c0ee89  waqt_simple.zip' | sha256sum --check
+            unzip -t waqt_simple.zip
+
+            mkdir source
+            unzip -q waqt_simple.zip -d source
+
+            echo '=== QA SOURCE PATCH ==='
+            python3 - <<'PY'
+          from pathlib import Path
+          p = Path('source/waqt_alarm/lib/screens/alarms/alarm_editor_screen.dart')
+          s = p.read_text()
+          s = s.replace('      enabled: true,\n', '      enabled: widget.existing?.enabled ?? true,\n')
+          p.write_text(s)
+          PY
+
+            echo '=== CREATE ANDROID SCAFFOLD ==='
+            mkdir app
+            cd app
+            flutter create --platforms=android --org com.waqt --project-name waqt_alarm .
+            cd ..
+
+            echo '=== OVERLAY ALARM-ONLY SOURCE ==='
+            cp -R source/waqt_alarm/lib app/
+            rm -rf app/test
+            cp -R source/waqt_alarm/test app/test
+            cp source/waqt_alarm/pubspec.yaml app/pubspec.yaml
+            cp source/waqt_alarm/analysis_options.yaml app/analysis_options.yaml
+            cp ci/waqt_build.gradle.kts app/android/app/build.gradle.kts
+            cp source/waqt_alarm/android/app/src/main/AndroidManifest.xml app/android/app/src/main/AndroidManifest.xml
+
+            rm -rf app/android/app/src/main/kotlin
+            mkdir -p app/android/app/src/main/kotlin/com/waqt/alarm
+            cp ci/MainActivity.kt app/android/app/src/main/kotlin/com/waqt/alarm/MainActivity.kt
+
+            mkdir -p app/android/app/src/main/res/drawable app/android/app/src/main/res/raw app/android/app/src/main/res/values app/android/app/src/main/res/values-night
+            cp source/waqt_alarm/android/app/src/main/res/drawable/*.xml app/android/app/src/main/res/drawable/
+            cp source/waqt_alarm/android/app/src/main/res/raw/* app/android/app/src/main/res/raw/
+            cp source/waqt_alarm/android/app/src/main/res/values/*.xml app/android/app/src/main/res/values/
+            cp source/waqt_alarm/android/app/src/main/res/values-night/*.xml app/android/app/src/main/res/values-night/
+
+            echo '=== VERIFY SIMPLE SCOPE ==='
+            test ! -e app/lib/screens/medications
+            test ! -e app/lib/screens/tasks
+            test ! -e app/lib/screens/home
+            test ! -e app/lib/screens/shell_screen.dart
+            grep -q "version: 1.3.0+4" app/pubspec.yaml
+            grep -q "WeekdaySelector" app/lib/screens/alarms/alarm_editor_screen.dart
+            grep -q "الغفوة" app/lib/screens/alarms/alarm_editor_screen.dart
+            grep -q "النغمة" app/lib/screens/alarms/alarm_editor_screen.dart
+            grep -q "تم ضبط المنب" app/lib/screens/alarms/alarm_editor_screen.dart
+
+            cd app
+            echo '=== PUB GET ==='
+            flutter pub get
+            echo '=== ANALYZE ==='
+            flutter analyze --no-fatal-infos
+            echo '=== TEST ==='
+            flutter test
+            echo '=== RELEASE BUILD ==='
+            flutter build apk --release --build-name=1.3.0 --build-number=4
+            cd ..
+
+            cp app/build/app/outputs/flutter-apk/app-release.apk ci-output-simple/WAQT-Simple-Alarm-v1.3.apk
+
+            echo '=== APK VERIFY ==='
+            APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+            AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
+            test -n "$APKSIGNER"
+            test -n "$AAPT"
+            "$APKSIGNER" verify --verbose --print-certs ci-output-simple/WAQT-Simple-Alarm-v1.3.apk | tee ci-output-simple/new-cert.txt
+            "$AAPT" dump badging ci-output-simple/WAQT-Simple-Alarm-v1.3.apk | tee ci-output-simple/badging.txt
+            grep -q "package: name='com.waqt.alarm'" ci-output-simple/badging.txt
+            grep -q "versionCode='4'" ci-output-simple/badging.txt
+            grep -q "versionName='1.3.0'" ci-output-simple/badging.txt
+
+            NEW_CERT=$(grep 'Signer #1 certificate SHA-256 digest:' ci-output-simple/new-cert.txt | head -1 | sed 's/.*: //')
+            OLD_APK='ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk'
+            COMPAT='unknown'
+            OLD_CERT='unavailable'
+            if [ -f "$OLD_APK" ]; then
+              "$APKSIGNER" verify --print-certs "$OLD_APK" | tee ci-output-simple/old-cert.txt
+              OLD_CERT=$(grep 'Signer #1 certificate SHA-256 digest:' ci-output-simple/old-cert.txt | head -1 | sed 's/.*: //')
+              if [ "$OLD_CERT" = "$NEW_CERT" ]; then COMPAT='true'; else COMPAT='false'; fi
+            fi
+
+            sha256sum ci-output-simple/WAQT-Simple-Alarm-v1.3.apk | tee ci-output-simple/WAQT-Simple-Alarm-v1.3.apk.sha256
+            {
+              echo 'SUCCESS'
+              echo 'package_id=com.waqt.alarm'
+              echo 'version_name=1.3.0'
+              echo 'version_code=4'
+              echo "old_certificate_sha256=$OLD_CERT"
+              echo "new_certificate_sha256=$NEW_CERT"
+              echo "update_signature_compatible=$COMPAT"
+            } > ci-output-simple/status.txt
+            ls -lh ci-output-simple/WAQT-Simple-Alarm-v1.3.apk
+          ) 2>&1 | tee ci-output-simple/build.log
+          result=${PIPESTATUS[0]}
+          if [ "$result" -ne 0 ]; then
+            echo "FAILED:$result" > ci-output-simple/status.txt
+          fi
+          echo "pipeline_exit=$result" >> ci-output-simple/status.txt
+          exit "$result"
+
+      - name: Publish diagnostics and APK
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p ci-output-simple
+          if [ ! -f ci-output-simple/status.txt ]; then echo 'FAILED:setup-or-runner' > ci-output-simple/status.txt; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f ci-output-simple
+          git commit -m 'ci: WAQT simple alarm APK result [skip ci]' || exit 0
+          git push origin HEAD:waqt-simple-alarm-build
+
+      - name: Upload verified APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WAQT-Simple-Alarm-APK
+          path: |
+            ci-output-simple/WAQT-Simple-Alarm-v1.3.apk
+            ci-output-simple/WAQT-Simple-Alarm-v1.3.apk.sha256
+            ci-output-simple/status.txt
+          compression-level: 0
+          retention-days: 30

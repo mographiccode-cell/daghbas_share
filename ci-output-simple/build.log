@@ -1,0 +1,297 @@
+=== TOOLCHAIN ===
+Flutter 3.47.0 • channel stable • https://github.com/flutter/flutter.git
+Framework • revision 4cf2416426 (3 weeks ago) • 2026-08-11 11:53:49 -0700
+Engine • hash 59d54a2b2896a6bbf356c94b7fac7b9e235bdacd (revision 5f77625673) (22 days ago) • 2026-08-11 16:38:36.000Z
+Tools • Dart 3.13.0 • DevTools 2.60.0
+openjdk version "17.0.20.1" 2026-08-18
+OpenJDK Runtime Environment Temurin-17.0.20.1+1 (build 17.0.20.1+1)
+OpenJDK 64-Bit Server VM Temurin-17.0.20.1+1 (build 17.0.20.1+1, mixed mode, sharing)
+=== SOURCE INTEGRITY ===
+waqt_simple.zip: OK
+Archive:  waqt_simple.zip
+    testing: waqt_alarm/              OK
+    testing: waqt_alarm/test/         OK
+    testing: waqt_alarm/test/schedule_calculator_test.dart   OK
+    testing: waqt_alarm/android/      OK
+    testing: waqt_alarm/android/app/   OK
+    testing: waqt_alarm/android/app/src/   OK
+    testing: waqt_alarm/android/app/src/main/   OK
+    testing: waqt_alarm/android/app/src/main/res/   OK
+    testing: waqt_alarm/android/app/src/main/res/drawable/   OK
+    testing: waqt_alarm/android/app/src/main/res/drawable/ic_launcher_waqt.xml   OK
+    testing: waqt_alarm/android/app/src/main/res/drawable/ic_stat_alarm.xml   OK
+    testing: waqt_alarm/android/app/src/main/res/raw/   OK
+    testing: waqt_alarm/android/app/src/main/res/raw/keep.xml   OK
+    testing: waqt_alarm/android/app/src/main/res/raw/waqt_soft.ogg   OK
+    testing: waqt_alarm/android/app/src/main/res/raw/waqt_digital.ogg   OK
+    testing: waqt_alarm/android/app/src/main/res/raw/waqt_classic.ogg   OK
+    testing: waqt_alarm/android/app/src/main/res/values-night/   OK
+    testing: waqt_alarm/android/app/src/main/res/values-night/styles.xml   OK
+    testing: waqt_alarm/android/app/src/main/res/values/   OK
+    testing: waqt_alarm/android/app/src/main/res/values/styles.xml   OK
+    testing: waqt_alarm/android/app/src/main/res/values/colors.xml   OK
+    testing: waqt_alarm/android/app/src/main/AndroidManifest.xml   OK
+    testing: waqt_alarm/pubspec.yaml   OK
+    testing: waqt_alarm/lib/          OK
+    testing: waqt_alarm/lib/data/     OK
+    testing: waqt_alarm/lib/data/app_database.dart   OK
+    testing: waqt_alarm/lib/core/     OK
+    testing: waqt_alarm/lib/core/utils/   OK
+    testing: waqt_alarm/lib/core/utils/time_utils.dart   OK
+    testing: waqt_alarm/lib/core/theme/   OK
+    testing: waqt_alarm/lib/core/theme/app_colors.dart   OK
+    testing: waqt_alarm/lib/core/theme/app_theme.dart   OK
+    testing: waqt_alarm/lib/models/   OK
+    testing: waqt_alarm/lib/models/alarm.dart   OK
+    testing: waqt_alarm/lib/services/   OK
+    testing: waqt_alarm/lib/services/schedule_calculator.dart   OK
+    testing: waqt_alarm/lib/services/notification_service.dart   OK
+    testing: waqt_alarm/lib/state/    OK
+    testing: waqt_alarm/lib/state/app_state.dart   OK
+    testing: waqt_alarm/lib/main.dart   OK
+    testing: waqt_alarm/lib/screens/   OK
+    testing: waqt_alarm/lib/screens/alarm_ring_screen.dart   OK
+    testing: waqt_alarm/lib/screens/alarms/   OK
+    testing: waqt_alarm/lib/screens/alarms/alarm_editor_screen.dart   OK
+    testing: waqt_alarm/lib/screens/alarms/alarms_screen.dart   OK
+    testing: waqt_alarm/lib/app.dart   OK
+    testing: waqt_alarm/lib/widgets/   OK
+    testing: waqt_alarm/lib/widgets/weekday_selector.dart   OK
+    testing: waqt_alarm/analysis_options.yaml   OK
+No errors detected in compressed data of waqt_simple.zip.
+=== QA SOURCE PATCH ===
+=== CREATE ANDROID SCAFFOLD ===
+Creating project ....
+Resolving dependencies...
+Downloading packages...
+Got dependencies.
+Wrote 35 files.
+
+All done!
+You can find general documentation for Flutter at: https://docs.flutter.dev/
+Detailed API documentation is available at: https://api.flutter.dev/
+If you prefer video documentation, consider: https://www.youtube.com/c/flutterdev
+
+In order to run your application, type:
+
+  $ flutter run
+
+Your application code is in ./lib/main.dart.
+
+=== OVERLAY ALARM-ONLY SOURCE ===
+=== VERIFY SIMPLE SCOPE ===
+=== PUB GET ===
+Resolving dependencies...
+Downloading packages...
++ args 2.7.0
++ dbus 0.7.15
++ equatable 2.1.0
++ ffi 2.2.0
+< flutter_lints 5.0.0 (was 6.0.0) (6.0.0 available)
++ flutter_local_notifications 19.5.0 (22.3.0 available)
++ flutter_local_notifications_linux 6.0.0 (8.0.1 available)
++ flutter_local_notifications_platform_interface 9.1.0 (12.2.0 available)
++ flutter_local_notifications_windows 1.0.3 (3.1.1 available)
++ flutter_localizations 0.0.0 from sdk flutter
++ flutter_timezone 5.1.0
++ flutter_web_plugins 0.0.0 from sdk flutter
++ http 1.6.0
++ http_parser 4.1.2
++ intl 0.20.3
+< lints 5.1.1 (was 6.1.0) (6.1.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
++ nested 1.0.0
+  path 1.9.1 (from transitive dependency to direct dependency)
++ petitparser 7.0.2
++ platform 3.1.6
++ plugin_platform_interface 2.1.8
++ provider 6.1.5+1
++ sqflite 2.4.3
++ sqflite_android 2.4.3
++ sqflite_common 2.5.11
++ sqflite_darwin 2.4.3+1
++ sqflite_platform_interface 2.4.1
++ synchronized 3.4.1+2
+  test_api 0.7.12 (0.7.13 available)
++ timezone 0.10.1 (0.11.1 available)
++ typed_data 1.4.0
+  vector_math 2.4.0 (2.4.2 available)
++ web 1.1.1
++ xdg_directories 1.1.0
++ xml 6.6.1 (7.0.1 available)
+These packages are no longer being depended on:
+- cupertino_icons 1.0.9
+Changed 34 dependencies!
+12 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Upgrading analysis_options.yaml to exclude build and platform directories.
+=== ANALYZE ===
+Analyzing app...                                                
+
+   info • 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement • lib/screens/alarms/alarm_editor_screen.dart:69:17 • deprecated_member_use
+   info • 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement • lib/screens/alarms/alarm_editor_screen.dart:72:17 • deprecated_member_use
+   info • 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement • lib/screens/alarms/alarm_editor_screen.dart:93:15 • deprecated_member_use
+   info • 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement • lib/screens/alarms/alarm_editor_screen.dart:95:15 • deprecated_member_use
+   info • The import of 'dart:typed_data' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/foundation.dart'. Try removing the import directive • lib/services/notification_service.dart:3:8 • unnecessary_import
+
+5 issues found. (ran in 9.3s)
+=== TEST ===
+
+::group::✅ Passing tests
+✅ one-time alarm moves to tomorrow when time already passed
+✅ weekday alarm only returns selected weekday
+✅ human confirmation includes hours and minutes
+::endgroup::
+
+🎉 3 tests passed.
+=== RELEASE BUILD ===
+Running Gradle task 'assembleRelease'...                        
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): flutter_timezone
+Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
+
+Please check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.
+If no such version exists, report the issue to the plugin. If necessary, here is a guide on filing
+an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
+
+If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 3376 bytes (99.8% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Caught exception: Already watching path: /home/runner/work/daghbas_share/daghbas_share/app/android
+Running Gradle task 'assembleRelease'...                          266.8s
+✓ Built build/app/outputs/flutter-apk/app-release.apk (53.5MB)
+=== APK VERIFY ===
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): false
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v3.2 scheme (APK Signature Scheme v3.2): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+V2 Signer: certificate DN: C=US, O=Android, CN=Android Debug
+V2 Signer: certificate SHA-256 digest: b5e96a752c7f5762114335f8c3e46568b6228adfbb4365a9260d00204dac7109
+V2 Signer: certificate SHA-1 digest: 392ef35458f2a02359474c2f3e43191a8760f0cf
+V2 Signer: certificate MD5 digest: e66136437064c608b132543ee60af63a
+V2 Signer: key algorithm: RSA
+V2 Signer: key size (bits): 2048
+V2 Signer: public key SHA-256 digest: ebab013eddd365c3d6c839f6896841aeeff13e42d9acaeab3552816c5a0af225
+V2 Signer: public key SHA-1 digest: 634d920a808f49dbb849953f05a99d3ff95e5419
+V2 Signer: public key MD5 digest: 4be7d9810934e350ae5029b0440241a6
+package: name='com.waqt.alarm' versionCode='4' versionName='1.3.0' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
+sdkVersion:'24'
+targetSdkVersion:'36'
+uses-permission: name='android.permission.POST_NOTIFICATIONS'
+uses-permission: name='android.permission.VIBRATE'
+uses-permission: name='android.permission.RECEIVE_BOOT_COMPLETED'
+uses-permission: name='android.permission.WAKE_LOCK'
+uses-permission: name='android.permission.USE_EXACT_ALARM'
+uses-permission: name='android.permission.USE_FULL_SCREEN_INTENT'
+uses-permission: name='com.waqt.alarm.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'
+application-label:'وقت'
+application-label-af:'وقت'
+application-label-am:'وقت'
+application-label-ar:'وقت'
+application-label-as:'وقت'
+application-label-az:'وقت'
+application-label-be:'وقت'
+application-label-bg:'وقت'
+application-label-bn:'وقت'
+application-label-bs:'وقت'
+application-label-ca:'وقت'
+application-label-cs:'وقت'
+application-label-da:'وقت'
+application-label-de:'وقت'
+application-label-el:'وقت'
+application-label-en-AU:'وقت'
+application-label-en-CA:'وقت'
+application-label-en-GB:'وقت'
+application-label-en-IN:'وقت'
+application-label-en-XC:'وقت'
+application-label-es:'وقت'
+application-label-es-US:'وقت'
+application-label-et:'وقت'
+application-label-eu:'وقت'
+application-label-fa:'وقت'
+application-label-fi:'وقت'
+application-label-fr:'وقت'
+application-label-fr-CA:'وقت'
+application-label-gl:'وقت'
+application-label-gu:'وقت'
+application-label-hi:'وقت'
+application-label-hr:'وقت'
+application-label-hu:'وقت'
+application-label-hy:'وقت'
+application-label-in:'وقت'
+application-label-is:'وقت'
+application-label-it:'وقت'
+application-label-iw:'وقت'
+application-label-ja:'وقت'
+application-label-ka:'وقت'
+application-label-kk:'وقت'
+application-label-km:'وقت'
+application-label-kn:'وقت'
+application-label-ko:'وقت'
+application-label-ky:'وقت'
+application-label-lo:'وقت'
+application-label-lt:'وقت'
+application-label-lv:'وقت'
+application-label-mk:'وقت'
+application-label-ml:'وقت'
+application-label-mn:'وقت'
+application-label-mr:'وقت'
+application-label-ms:'وقت'
+application-label-my:'وقت'
+application-label-nb:'وقت'
+application-label-ne:'وقت'
+application-label-nl:'وقت'
+application-label-or:'وقت'
+application-label-pa:'وقت'
+application-label-pl:'وقت'
+application-label-pt:'وقت'
+application-label-pt-BR:'وقت'
+application-label-pt-PT:'وقت'
+application-label-ro:'وقت'
+application-label-ru:'وقت'
+application-label-si:'وقت'
+application-label-sk:'وقت'
+application-label-sl:'وقت'
+application-label-sq:'وقت'
+application-label-sr:'وقت'
+application-label-sr-Latn:'وقت'
+application-label-sv:'وقت'
+application-label-sw:'وقت'
+application-label-ta:'وقت'
+application-label-te:'وقت'
+application-label-th:'وقت'
+application-label-tl:'وقت'
+application-label-tr:'وقت'
+application-label-uk:'وقت'
+application-label-ur:'وقت'
+application-label-uz:'وقت'
+application-label-vi:'وقت'
+application-label-zh-CN:'وقت'
+application-label-zh-HK:'وقت'
+application-label-zh-TW:'وقت'
+application-label-zu:'وقت'
+application-icon-120:'res/rS.xml'
+application-icon-160:'res/rS.xml'
+application-icon-240:'res/rS.xml'
+application-icon-320:'res/rS.xml'
+application-icon-480:'res/rS.xml'
+application-icon-640:'res/rS.xml'
+application-icon-65534:'res/rS.xml'
+application: label='وقت' icon='res/rS.xml'
+launchable-activity: name='com.waqt.alarm.MainActivity'  label='' icon=''
+uses-library-not-required:'androidx.window.extensions'
+uses-library-not-required:'androidx.window.sidecar'
+feature-group: label=''
+  uses-feature: name='android.hardware.faketouch'
+  uses-implied-feature: name='android.hardware.faketouch' reason='default feature for all apps'
+main
+other-receivers
+supports-screens: 'small' 'normal' 'large' 'xlarge'
+supports-any-density: 'true'
+locales: '--_--' 'af' 'am' 'ar' 'as' 'az' 'be' 'bg' 'bn' 'bs' 'ca' 'cs' 'da' 'de' 'el' 'en-AU' 'en-CA' 'en-GB' 'en-IN' 'en-XC' 'es' 'es-US' 'et' 'eu' 'fa' 'fi' 'fr' 'fr-CA' 'gl' 'gu' 'hi' 'hr' 'hu' 'hy' 'in' 'is' 'it' 'iw' 'ja' 'ka' 'kk' 'km' 'kn' 'ko' 'ky' 'lo' 'lt' 'lv' 'mk' 'ml' 'mn' 'mr' 'ms' 'my' 'nb' 'ne' 'nl' 'or' 'pa' 'pl' 'pt' 'pt-BR' 'pt-PT' 'ro' 'ru' 'si' 'sk' 'sl' 'sq' 'sr' 'sr-Latn' 'sv' 'sw' 'ta' 'te' 'th' 'tl' 'tr' 'uk' 'ur' 'uz' 'vi' 'zh-CN' 'zh-HK' 'zh-TW' 'zu'
+densities: '120' '160' '240' '320' '480' '640' '65534'
+native-code: 'arm64-v8a' 'armeabi-v7a' 'x86_64'
