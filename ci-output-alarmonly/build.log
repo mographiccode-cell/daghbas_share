@@ -1,0 +1,71 @@
+=== TOOLCHAIN ===
+Flutter 3.47.0 • channel stable • https://github.com/flutter/flutter.git
+Framework • revision 4cf2416426 (3 weeks ago) • 2026-08-11 11:53:49 -0700
+Engine • hash 59d54a2b2896a6bbf356c94b7fac7b9e235bdacd (revision 5f77625673) (22 days ago) • 2026-08-11 16:38:36.000Z
+Tools • Dart 3.13.0 • DevTools 2.60.0
+openjdk version "17.0.20.1" 2026-08-18
+OpenJDK Runtime Environment Temurin-17.0.20.1+1 (build 17.0.20.1+1)
+OpenJDK 64-Bit Server VM Temurin-17.0.20.1+1 (build 17.0.20.1+1, mixed mode, sharing)
+=== SOURCE INTEGRITY ===
+alarmonly_source.zip: OK
+Archive:  alarmonly_source.zip
+    testing: lib/                     OK
+    testing: lib/state/               OK
+    testing: lib/state/app_state.dart   OK
+    testing: lib/screens/             OK
+    testing: lib/screens/alarms/      OK
+    testing: lib/screens/alarms/alarms_screen.dart   OK
+    testing: lib/screens/alarms/alarm_editor_screen.dart   OK
+    testing: lib/screens/shell_screen.dart   OK
+    testing: lib/screens/alarm_ring_screen.dart   OK
+    testing: lib/services/            OK
+    testing: lib/services/notification_service.dart   OK
+    testing: lib/services/schedule_calculator.dart   OK
+    testing: lib/data/                OK
+    testing: lib/data/app_database.dart   OK
+    testing: lib/models/              OK
+    testing: lib/models/alarm.dart    OK
+    testing: lib/app.dart             OK
+    testing: lib/widgets/             OK
+    testing: lib/widgets/glass_card.dart   OK
+    testing: lib/widgets/weekday_selector.dart   OK
+    testing: lib/widgets/section_title.dart   OK
+    testing: lib/core/                OK
+    testing: lib/core/utils/          OK
+    testing: lib/core/utils/time_utils.dart   OK
+    testing: lib/core/theme/          OK
+    testing: lib/core/theme/app_colors.dart   OK
+    testing: lib/core/theme/app_theme.dart   OK
+    testing: lib/main.dart            OK
+    testing: test/                    OK
+    testing: test/schedule_calculator_test.dart   OK
+    testing: pubspec.yaml             OK
+    testing: analysis_options.yaml    OK
+    testing: android/app/src/main/AndroidManifest.xml   OK
+    testing: android/app/src/main/res/drawable/ic_stat_alarm.xml   OK
+    testing: android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png   OK
+No errors detected in compressed data of alarmonly_source.zip.
+=== CREATE CURRENT FLUTTER ANDROID SCAFFOLD ===
+Creating project alarmonly_app...
+Resolving dependencies in `alarmonly_app`...
+Downloading packages...
+Got dependencies in `alarmonly_app`.
+Wrote 35 files.
+
+All done!
+You can find general documentation for Flutter at: https://docs.flutter.dev/
+Detailed API documentation is available at: https://api.flutter.dev/
+If you prefer video documentation, consider: https://www.youtube.com/c/flutterdev
+
+In order to run your application, type:
+
+  $ cd alarmonly_app
+  $ flutter run
+
+Your application code is in alarmonly_app/lib/main.dart.
+
+=== OVERLAY ALARM-ONLY SOURCE ===
+=== PACKAGE + GRADLE ===
+=== APP ICON ===
+=== GENERATE ALARM SOUNDS ===
+=== VERIFY ALARM-ONLY SCOPE ===
