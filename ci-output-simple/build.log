@@ -1,0 +1,82 @@
+=== TOOLCHAIN ===
+Flutter 3.47.0 • channel stable • https://github.com/flutter/flutter.git
+Framework • revision 4cf2416426 (3 weeks ago) • 2026-08-11 11:53:49 -0700
+Engine • hash 59d54a2b2896a6bbf356c94b7fac7b9e235bdacd (revision 5f77625673) (22 days ago) • 2026-08-11 16:38:36.000Z
+Tools • Dart 3.13.0 • DevTools 2.60.0
+openjdk version "17.0.20.1" 2026-08-18
+OpenJDK Runtime Environment Temurin-17.0.20.1+1 (build 17.0.20.1+1)
+OpenJDK 64-Bit Server VM Temurin-17.0.20.1+1 (build 17.0.20.1+1, mixed mode, sharing)
+=== SOURCE INTEGRITY ===
+waqt_simple.zip: OK
+Archive:  waqt_simple.zip
+    testing: waqt_alarm/              OK
+    testing: waqt_alarm/test/         OK
+    testing: waqt_alarm/test/schedule_calculator_test.dart   OK
+    testing: waqt_alarm/android/      OK
+    testing: waqt_alarm/android/app/   OK
+    testing: waqt_alarm/android/app/src/   OK
+    testing: waqt_alarm/android/app/src/main/   OK
+    testing: waqt_alarm/android/app/src/main/res/   OK
+    testing: waqt_alarm/android/app/src/main/res/drawable/   OK
+    testing: waqt_alarm/android/app/src/main/res/drawable/ic_launcher_waqt.xml   OK
+    testing: waqt_alarm/android/app/src/main/res/drawable/ic_stat_alarm.xml   OK
+    testing: waqt_alarm/android/app/src/main/res/raw/   OK
+    testing: waqt_alarm/android/app/src/main/res/raw/keep.xml   OK
+    testing: waqt_alarm/android/app/src/main/res/raw/waqt_soft.ogg   OK
+    testing: waqt_alarm/android/app/src/main/res/raw/waqt_digital.ogg   OK
+    testing: waqt_alarm/android/app/src/main/res/raw/waqt_classic.ogg   OK
+    testing: waqt_alarm/android/app/src/main/res/values-night/   OK
+    testing: waqt_alarm/android/app/src/main/res/values-night/styles.xml   OK
+    testing: waqt_alarm/android/app/src/main/res/values/   OK
+    testing: waqt_alarm/android/app/src/main/res/values/styles.xml   OK
+    testing: waqt_alarm/android/app/src/main/res/values/colors.xml   OK
+    testing: waqt_alarm/android/app/src/main/AndroidManifest.xml   OK
+    testing: waqt_alarm/pubspec.yaml   OK
+    testing: waqt_alarm/lib/          OK
+    testing: waqt_alarm/lib/data/     OK
+    testing: waqt_alarm/lib/data/app_database.dart   OK
+    testing: waqt_alarm/lib/core/     OK
+    testing: waqt_alarm/lib/core/utils/   OK
+    testing: waqt_alarm/lib/core/utils/time_utils.dart   OK
+    testing: waqt_alarm/lib/core/theme/   OK
+    testing: waqt_alarm/lib/core/theme/app_colors.dart   OK
+    testing: waqt_alarm/lib/core/theme/app_theme.dart   OK
+    testing: waqt_alarm/lib/models/   OK
+    testing: waqt_alarm/lib/models/alarm.dart   OK
+    testing: waqt_alarm/lib/services/   OK
+    testing: waqt_alarm/lib/services/schedule_calculator.dart   OK
+    testing: waqt_alarm/lib/services/notification_service.dart   OK
+    testing: waqt_alarm/lib/state/    OK
+    testing: waqt_alarm/lib/state/app_state.dart   OK
+    testing: waqt_alarm/lib/main.dart   OK
+    testing: waqt_alarm/lib/screens/   OK
+    testing: waqt_alarm/lib/screens/alarm_ring_screen.dart   OK
+    testing: waqt_alarm/lib/screens/alarms/   OK
+    testing: waqt_alarm/lib/screens/alarms/alarm_editor_screen.dart   OK
+    testing: waqt_alarm/lib/screens/alarms/alarms_screen.dart   OK
+    testing: waqt_alarm/lib/app.dart   OK
+    testing: waqt_alarm/lib/widgets/   OK
+    testing: waqt_alarm/lib/widgets/weekday_selector.dart   OK
+    testing: waqt_alarm/analysis_options.yaml   OK
+No errors detected in compressed data of waqt_simple.zip.
+=== QA SOURCE PATCH ===
+=== CREATE ANDROID SCAFFOLD ===
+Creating project ....
+Resolving dependencies...
+Downloading packages...
+Got dependencies.
+Wrote 35 files.
+
+All done!
+You can find general documentation for Flutter at: https://docs.flutter.dev/
+Detailed API documentation is available at: https://api.flutter.dev/
+If you prefer video documentation, consider: https://www.youtube.com/c/flutterdev
+
+In order to run your application, type:
+
+  $ flutter run
+
+Your application code is in ./lib/main.dart.
+
+=== OVERLAY ALARM-ONLY SOURCE ===
+=== VERIFY SIMPLE SCOPE ===

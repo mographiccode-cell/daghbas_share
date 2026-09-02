@@ -1,0 +1,2 @@
+FAILED:1
+pipeline_exit=1
