@@ -1,0 +1,139 @@
+name: Build WAQT Simple Alarm
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: waqt-simple-build
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.0'
+          channel: stable
+          cache: true
+
+      - name: Verify source and build
+        shell: bash
+        run: |
+          set -e
+          rm -rf app unpack ci-output-simple source.zip
+          mkdir -p ci-output-simple unpack
+          echo '=== SOURCE ==='
+          test "$(wc -c < ci/waqt_simple/source.b64)" -eq 52472
+          base64 --decode ci/waqt_simple/source.b64 > source.zip
+          echo 'c6cfe82a761eb36f98744406828e284c7878342f5d983f958cfcec8617a90383  source.zip' | sha256sum --check
+          unzip -t source.zip
+          unzip -q source.zip -d unpack
+
+          echo '=== SCAFFOLD ==='
+          mkdir app
+          cd app
+          flutter create --platforms=android --org com.waqt --project-name waqt_alarm .
+          cd ..
+          SRC=unpack/waqt_simple_pack
+          rm -rf app/lib app/test
+          cp -R "$SRC/lib" app/lib
+          cp -R "$SRC/test" app/test
+          cp "$SRC/pubspec.yaml" app/pubspec.yaml
+          cp "$SRC/analysis_options.yaml" app/analysis_options.yaml
+          cp "$SRC/android/app/build.gradle.kts" app/android/app/build.gradle.kts
+          cp "$SRC/android/app/src/main/AndroidManifest.xml" app/android/app/src/main/AndroidManifest.xml
+          rm -rf app/android/app/src/main/kotlin
+          mkdir -p app/android/app/src/main/kotlin/com/waqt/alarm
+          cp "$SRC/android/app/src/main/kotlin/com/waqt/alarm/MainActivity.kt" app/android/app/src/main/kotlin/com/waqt/alarm/MainActivity.kt
+          cp -R "$SRC/android/app/src/main/res/." app/android/app/src/main/res/
+
+          echo '=== RINGTONES ==='
+          python3 - <<'PY'
+          import math, wave, struct
+          from pathlib import Path
+          raw=Path('app/android/app/src/main/res/raw'); raw.mkdir(parents=True, exist_ok=True)
+          sr=44100
+          def write(name,dur,fn,amp):
+              with wave.open(str(raw/f'{name}.wav'),'w') as w:
+                  w.setnchannels(1); w.setsampwidth(2); w.setframerate(sr)
+                  data=bytearray()
+                  for i in range(int(sr*dur)):
+                      t=i/sr; v=max(-1,min(1,fn(t)))
+                      data += struct.pack('<h',int(v*amp*32767))
+                  w.writeframes(data)
+          write('waqt_classic',4.0,lambda t: math.sin(2*math.pi*(880 if int(t*2)%2==0 else 660)*t)*(1 if t%1<.7 else 0),.42)
+          write('waqt_soft',5.0,lambda t: math.sin(2*math.pi*(440 if int(t)%2==0 else 523.25)*t)*(1 if t%1<.8 else 0),.22)
+          write('waqt_digital',3.2,lambda t: math.sin(2*math.pi*1100*t)*(1 if t%.4<.18 else 0),.38)
+          PY
+
+          echo '=== IDENTITY ==='
+          grep -q 'applicationId = "com.waqt.alarm"' app/android/app/build.gradle.kts
+          grep -q 'version: 2.0.0+4' app/pubspec.yaml
+          grep -q 'تذكيرات قديمة' app/lib/services/notification_service.dart
+          ! grep -R "MedicationEditorScreen\|TasksScreen\|MedicationsScreen" app/lib
+
+          cd app
+          flutter pub get
+          echo '=== ANALYZE ==='
+          flutter analyze --no-fatal-infos
+          echo '=== TEST ==='
+          flutter test
+          echo '=== RELEASE ==='
+          flutter build apk --release --build-name=2.0.0 --build-number=4
+          cd ..
+          cp app/build/app/outputs/flutter-apk/app-release.apk ci-output-simple/WAQT-Simple-Alarm-v2.0.apk
+
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --verbose --print-certs ci-output-simple/WAQT-Simple-Alarm-v2.0.apk | tee ci-output-simple/new-signature.txt
+          sha256sum ci-output-simple/WAQT-Simple-Alarm-v2.0.apk | tee ci-output-simple/WAQT-Simple-Alarm-v2.0.apk.sha256
+
+          echo '=== UPDATE COMPATIBILITY ==='
+          curl -L --fail --retry 3 -o previous.apk https://raw.githubusercontent.com/mographiccode-cell/daghbas_share/waqt-v12-build/ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk
+          "$APKSIGNER" verify --print-certs previous.apk > ci-output-simple/old-signature.txt
+          OLD=$(grep 'Signer #1 certificate SHA-256 digest:' ci-output-simple/old-signature.txt | sed 's/.*: //')
+          NEW=$(grep 'Signer #1 certificate SHA-256 digest:' ci-output-simple/new-signature.txt | sed 's/.*: //')
+          echo "old=$OLD" | tee ci-output-simple/update-compatibility.txt
+          echo "new=$NEW" | tee -a ci-output-simple/update-compatibility.txt
+          if [ "$OLD" = "$NEW" ]; then
+            echo 'DIRECT_UPDATE=YES' | tee -a ci-output-simple/update-compatibility.txt
+          else
+            echo 'DIRECT_UPDATE=NO_SIGNATURE_MISMATCH' | tee -a ci-output-simple/update-compatibility.txt
+          fi
+          echo SUCCESS > ci-output-simple/status.txt
+
+      - name: Publish output
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p ci-output-simple
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f ci-output-simple
+          git commit -m 'ci: WAQT simple alarm build [skip ci]' || exit 0
+          git push origin HEAD:waqt-simple-build
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WAQT-Simple-Alarm-APK
+          path: |
+            ci-output-simple/WAQT-Simple-Alarm-v2.0.apk
+            ci-output-simple/WAQT-Simple-Alarm-v2.0.apk.sha256
+            ci-output-simple/update-compatibility.txt
+          compression-level: 0
+          retention-days: 30
