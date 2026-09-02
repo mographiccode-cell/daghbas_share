@@ -65,11 +65,7 @@ In order to run your application, type:
 Your application code is in alarmonly_app/lib/main.dart.
 
 === OVERLAY ALARM-ONLY SOURCE ===
-=== PACKAGE + GRADLE ===
-=== APP ICON ===
-=== GENERATE ALARM SOUNDS ===
 === VERIFY ALARM-ONLY SCOPE ===
-=== PUB GET ===
 Resolving dependencies...
 Downloading packages...
 + args 2.7.0
@@ -116,8 +112,59 @@ Upgrading analysis_options.yaml to exclude build and platform directories.
 === ANALYZE ===
 Analyzing alarmonly_app...                                      
 
-  error • The method 'containsAll' isn't defined for the type 'List'. Try correcting the name to the name of an existing method, or defining a method named 'containsAll' • lib/core/utils/time_utils.dart:30:32 • undefined_method
    info • 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement • lib/screens/alarms/alarm_editor_screen.dart:212:35 • deprecated_member_use
    info • 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement • lib/screens/alarms/alarm_editor_screen.dart:214:35 • deprecated_member_use
 
-3 issues found. (ran in 9.4s)
+2 issues found. (ran in 9.8s)
+=== TEST ===
+
+::group::✅ Passing tests
+✅ one-time alarm schedules the next occurrence only
+✅ weekday alarm only schedules selected weekdays
+::endgroup::
+
+🎉 2 tests passed.
+=== RELEASE APK ===
+Running Gradle task 'assembleRelease'...                        
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): flutter_timezone
+Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
+
+Please check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.
+If no such version exists, report the issue to the plugin. If necessary, here is a guide on filing
+an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
+
+If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 3212 bytes (99.8% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Caught exception: Already watching path: /home/runner/work/daghbas_share/daghbas_share/alarmonly_app/android
+Running Gradle task 'assembleRelease'...                          226.8s
+✓ Built build/app/outputs/flutter-apk/app-release.apk (54.3MB)
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): false
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v3.2 scheme (APK Signature Scheme v3.2): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+V2 Signer: certificate DN: C=US, O=Android, CN=Android Debug
+V2 Signer: certificate SHA-256 digest: 08d373363ae8d62cc2244b8fdd1bc5370c0e25f70cbc6f31247c098235c2c438
+V2 Signer: certificate SHA-1 digest: a5294f8335dfb9a8635635472d3675862b66ae47
+V2 Signer: certificate MD5 digest: 1358a8858b2e234c7aa74fefdaea6489
+V2 Signer: key algorithm: RSA
+V2 Signer: key size (bits): 2048
+V2 Signer: public key SHA-256 digest: c520e5d37752702047ba024e9ed09d8ec2c8098aa12ea1898fc303a83878df24
+V2 Signer: public key SHA-1 digest: 08ad053081ae3fb65b7f7ffa236b8d42d53e1da5
+V2 Signer: public key MD5 digest: dfeaebd4f4c0f98e395a269adef0aee7
+package: name='com.waqt.alarm' versionCode='4' versionName='2.0.0' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
+sdkVersion:'24'
+targetSdkVersion:'36'
+uses-permission: name='android.permission.POST_NOTIFICATIONS'
+uses-permission: name='android.permission.VIBRATE'
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100 54.1M  100 54.1M    0     0  58.2M      0 --:--:-- --:--:-- --:--:-- 58.1M
+V2 Signer: certificate DN: C=US, O=Android, CN=Android Debug
+V2 Signer: certificate SHA-256 digest: 27cb08dfe4d332d2e21288ca77b27d9b48db5ed50b1721617c355f8556124a2f
+V2 Signer: certificate SHA-1 digest: f41c335946cbcb7707dcdf2e722d2daf6775d2da
+V2 Signer: certificate MD5 digest: 061c2975577a22d80a33136c907e6a49
