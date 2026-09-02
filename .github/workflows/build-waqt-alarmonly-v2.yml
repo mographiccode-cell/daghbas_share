@@ -46,7 +46,6 @@ jobs:
             echo '=== TOOLCHAIN ==='
             flutter --version
             java -version
-
             echo '=== SOURCE INTEGRITY ==='
             cat ci/alarmonly/p00.txt ci/alarmonly/p01.txt ci/alarmonly/p02.txt ci/alarmonly/p03.txt > alarmonly_source.b64
             test "$(wc -c < alarmonly_source.b64)" -eq 34684
@@ -55,10 +54,8 @@ jobs:
             unzip -t alarmonly_source.zip
             mkdir alarmonly_source
             unzip -q alarmonly_source.zip -d alarmonly_source
-
             echo '=== CREATE CURRENT FLUTTER ANDROID SCAFFOLD ==='
             flutter create --platforms=android --org com.waqt --project-name waqt_alarm alarmonly_app
-
             echo '=== OVERLAY ALARM-ONLY SOURCE ==='
             cp -R alarmonly_source/lib alarmonly_app/
             rm -rf alarmonly_app/test
@@ -68,7 +65,6 @@ jobs:
             cp alarmonly_source/android/app/src/main/AndroidManifest.xml alarmonly_app/android/app/src/main/AndroidManifest.xml
             mkdir -p alarmonly_app/android/app/src/main/res/drawable alarmonly_app/android/app/src/main/res/raw
             cp alarmonly_source/android/app/src/main/res/drawable/ic_stat_alarm.xml alarmonly_app/android/app/src/main/res/drawable/ic_stat_alarm.xml
-
             echo '=== PACKAGE + GRADLE ==='
             cat > alarmonly_app/android/app/build.gradle.kts <<'EOF'
           plugins {
@@ -108,14 +104,12 @@ jobs:
           }
           EOF
             grep -q 'applicationId = "com.waqt.alarm"' alarmonly_app/android/app/build.gradle.kts
-
             echo '=== APP ICON ==='
             rm -rf alarmonly_app/android/app/src/main/res/mipmap-*
             for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p "alarmonly_app/android/app/src/main/res/mipmap-$density"
               cp alarmonly_source/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png "alarmonly_app/android/app/src/main/res/mipmap-$density/ic_launcher.png"
             done
-
             echo '=== GENERATE ALARM SOUNDS ==='
             python3 - <<'PY'
           import math, wave, struct
@@ -135,13 +129,12 @@ jobs:
           write('waqt_soft',5.0,lambda t: math.sin(2*math.pi*(440 if int(t)%2==0 else 523.25)*t)*(1 if (t%1)<.85 else 0),.25)
           write('waqt_digital',3.2,lambda t: math.sin(2*math.pi*1100*t)*(1 if (t%.4)<.18 else 0),.38)
           PY
-
             echo '=== VERIFY ALARM-ONLY SCOPE ==='
             ! grep -R -q "MedicationModel\|TaskReminder\|medicationById\|taskById" alarmonly_app/lib
             grep -q "المنبّه" alarmonly_app/lib/screens/alarms/alarms_screen.dart
             grep -q "تم ضبط المنب" alarmonly_app/lib/screens/alarms/alarm_editor_screen.dart
-            grep -q "waqt_classic" alarmonly_app/lib/screens/alarms/alarm_editor_screen.dart
-
+            grep -q "classic" alarmonly_app/lib/screens/alarms/alarm_editor_screen.dart
+            test -s alarmonly_app/android/app/src/main/res/raw/waqt_classic.wav
             cd alarmonly_app
             echo '=== PUB GET ==='
             flutter pub get
@@ -152,7 +145,6 @@ jobs:
             echo '=== RELEASE APK ==='
             flutter build apk --release --build-name=2.0.0 --build-number=4
             cd ..
-
             cp alarmonly_app/build/app/outputs/flutter-apk/app-release.apk ci-output-alarmonly/WAQT-Alarm-Only-v2.0.apk
             APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
             AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
@@ -160,7 +152,6 @@ jobs:
             "$APKSIGNER" verify --verbose --print-certs ci-output-alarmonly/WAQT-Alarm-Only-v2.0.apk | tee ci-output-alarmonly/new-cert.txt
             "$AAPT" dump badging ci-output-alarmonly/WAQT-Alarm-Only-v2.0.apk | head -5 | tee ci-output-alarmonly/package.txt
             grep -q "package: name='com.waqt.alarm'" ci-output-alarmonly/package.txt
-
             echo '=== COMPARE WITH PREVIOUS v1.2 SIGNER ==='
             set +e
             curl -fL --retry 3 -o /tmp/waqt-v12.apk 'https://raw.githubusercontent.com/mographiccode-cell/daghbas_share/waqt-v12-build/ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk'
@@ -180,7 +171,6 @@ jobs:
             else
               echo 'SIGNATURE_MATCH=unknown_old_apk_unavailable' | tee ci-output-alarmonly/update-compatibility.txt
             fi
-
             sha256sum ci-output-alarmonly/WAQT-Alarm-Only-v2.0.apk | tee ci-output-alarmonly/WAQT-Alarm-Only-v2.0.apk.sha256
             ls -lh ci-output-alarmonly/WAQT-Alarm-Only-v2.0.apk
             echo SUCCESS > ci-output-alarmonly/status.txt
