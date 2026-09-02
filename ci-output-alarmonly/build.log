@@ -69,3 +69,55 @@ Your application code is in alarmonly_app/lib/main.dart.
 === APP ICON ===
 === GENERATE ALARM SOUNDS ===
 === VERIFY ALARM-ONLY SCOPE ===
+=== PUB GET ===
+Resolving dependencies...
+Downloading packages...
++ args 2.7.0
++ dbus 0.7.15
++ equatable 2.1.0
++ ffi 2.2.0
+< flutter_lints 5.0.0 (was 6.0.0) (6.0.0 available)
++ flutter_local_notifications 19.5.0 (22.3.0 available)
++ flutter_local_notifications_linux 6.0.0 (8.0.1 available)
++ flutter_local_notifications_platform_interface 9.1.0 (12.2.0 available)
++ flutter_local_notifications_windows 1.0.3 (3.1.1 available)
++ flutter_localizations 0.0.0 from sdk flutter
++ flutter_timezone 5.1.0
++ flutter_web_plugins 0.0.0 from sdk flutter
++ http 1.6.0
++ http_parser 4.1.2
++ intl 0.20.3
+< lints 5.1.1 (was 6.1.0) (6.1.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
++ nested 1.0.0
+  path 1.9.1 (from transitive dependency to direct dependency)
++ petitparser 7.0.2
++ platform 3.1.6
++ plugin_platform_interface 2.1.8
++ provider 6.1.5+1
++ sqflite 2.4.3
++ sqflite_android 2.4.3
++ sqflite_common 2.5.11
++ sqflite_darwin 2.4.3+1
++ sqflite_platform_interface 2.4.1
++ synchronized 3.4.1+2
+  test_api 0.7.12 (0.7.13 available)
++ timezone 0.10.1 (0.11.1 available)
++ typed_data 1.4.0
+  vector_math 2.4.0 (2.4.2 available)
++ web 1.1.1
++ xdg_directories 1.1.0
++ xml 6.6.1 (7.0.1 available)
+Changed 33 dependencies!
+12 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Upgrading analysis_options.yaml to exclude build and platform directories.
+=== ANALYZE ===
+Analyzing alarmonly_app...                                      
+
+  error • The method 'containsAll' isn't defined for the type 'List'. Try correcting the name to the name of an existing method, or defining a method named 'containsAll' • lib/core/utils/time_utils.dart:30:32 • undefined_method
+   info • 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement • lib/screens/alarms/alarm_editor_screen.dart:212:35 • deprecated_member_use
+   info • 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement • lib/screens/alarms/alarm_editor_screen.dart:214:35 • deprecated_member_use
+
+3 issues found. (ran in 9.4s)
