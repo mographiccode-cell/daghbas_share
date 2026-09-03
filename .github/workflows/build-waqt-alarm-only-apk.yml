@@ -31,7 +31,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Build and verify Samsung-style alarm APK
+      - name: Build and verify 12-hour Samsung-style alarm APK
         shell: bash
         run: |
           rm -rf app source ci-output-alarm-only waqt_v12.b64 waqt_v12.zip
@@ -128,15 +128,15 @@ jobs:
             echo '=== TEST ==='
             flutter test
             echo '=== BUILD ==='
-            flutter build apk --release --build-name=3.0.0 --build-number=5
+            flutter build apk --release --build-name=3.1.0 --build-number=6
             cd ..
 
-            cp app/build/app/outputs/flutter-apk/app-release.apk ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.0.apk
+            cp app/build/app/outputs/flutter-apk/app-release.apk ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.1.apk
             APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
-            "$APKSIGNER" verify --verbose --print-certs ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.0.apk | tee ci-output-alarm-only/signature.txt
-            sha256sum ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.0.apk | tee ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.0.apk.sha256
+            "$APKSIGNER" verify --verbose --print-certs ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.1.apk | tee ci-output-alarm-only/signature.txt
+            sha256sum ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.1.apk | tee ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.1.apk.sha256
             keytool -list -v -keystore app/android/app/waqt-release.jks -storepass waqt2026 -alias waqt | grep 'SHA256:' | tee ci-output-alarm-only/signing-cert.txt
-            ls -lh ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.0.apk
+            ls -lh ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.1.apk
             echo SUCCESS > ci-output-alarm-only/status.txt
           ) 2>&1 | tee ci-output-alarm-only/build.log
           result=${PIPESTATUS[0]}
@@ -150,8 +150,8 @@ jobs:
         with:
           name: WAQT-Alarm-Samsung-Style-APK
           path: |
-            ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.0.apk
-            ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.0.apk.sha256
+            ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.1.apk
+            ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.1.apk.sha256
             ci-output-alarm-only/signature.txt
           compression-level: 0
           retention-days: 30
@@ -165,6 +165,6 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -f ci-output-alarm-only
-          git commit -m 'ci: WAQT Samsung-style alarm APK [skip ci]' || exit 0
+          git commit -m 'ci: WAQT 12-hour alarm APK [skip ci]' || exit 0
           git pull --rebase origin waqt-alarm-only-build || { git rebase --abort || true; echo 'Publish skipped due concurrent branch update'; exit 0; }
           git push origin HEAD:waqt-alarm-only-build || echo 'Publish skipped due concurrent branch update'
