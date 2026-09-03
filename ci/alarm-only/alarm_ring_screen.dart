@@ -38,6 +38,13 @@ class _AlarmRingScreenState extends State<AlarmRingScreen> {
     });
   }
 
+  String _clock12(DateTime value) {
+    final int hour12 = value.hour % 12 == 0 ? 12 : value.hour % 12;
+    return '${hour12.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _period(DateTime value) => value.hour < 12 ? 'صباحًا' : 'مساءً';
+
   Future<void> _dismiss() async {
     if (_working) return;
     setState(() => _working = true);
@@ -100,15 +107,36 @@ class _AlarmRingScreenState extends State<AlarmRingScreen> {
                   ),
                 ),
                 const Spacer(flex: 2),
-                Text(
-                  formatClock(_now),
+                Directionality(
                   textDirection: TextDirection.ltr,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 82,
-                    height: 1,
-                    fontWeight: FontWeight.w300,
-                    letterSpacing: -3,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: <Widget>[
+                      Text(
+                        _clock12(_now),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 82,
+                          height: 1,
+                          fontWeight: FontWeight.w300,
+                          letterSpacing: -3,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          _period(_now),
+                          textDirection: TextDirection.rtl,
+                          style: const TextStyle(
+                            color: Color(0xFFCFCFD5),
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 18),
