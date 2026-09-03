@@ -31,7 +31,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Build and verify 12-hour Samsung-style alarm APK
+      - name: Build and verify reliable Samsung-style alarm APK
         shell: bash
         run: |
           rm -rf app source ci-output-alarm-only waqt_v12.b64 waqt_v12.zip
@@ -84,7 +84,7 @@ jobs:
             cp -R source/waqt_alarm/test app/test
             cp source/waqt_alarm/pubspec.yaml app/pubspec.yaml
             cp source/waqt_alarm/analysis_options.yaml app/analysis_options.yaml
-            cp source/waqt_alarm/android/app/src/main/AndroidManifest.xml app/android/app/src/main/AndroidManifest.xml
+            cp ci/alarm-only/AndroidManifest.xml app/android/app/src/main/AndroidManifest.xml
             rm -rf app/android/app/src/main/kotlin
             mkdir -p app/android/app/src/main/kotlin/com/waqt/alarm
             cp ci/MainActivity.kt app/android/app/src/main/kotlin/com/waqt/alarm/MainActivity.kt
@@ -95,12 +95,14 @@ jobs:
             cp source/waqt_alarm/android/app/src/main/res/values/colors.xml app/android/app/src/main/res/values/colors.xml
             cp source/waqt_alarm/android/app/src/main/res/values-night/styles.xml app/android/app/src/main/res/values-night/styles.xml
 
-            echo '=== ALARM ONLY + ONE UI OVERRIDES ==='
+            echo '=== ALARM ONLY + RELIABILITY OVERRIDES ==='
             cp ci/alarm-only/app.dart app/lib/app.dart
             cp ci/alarm-only/alarms_screen.dart app/lib/screens/alarms/alarms_screen.dart
             cp ci/alarm-only/alarm_editor_screen.dart app/lib/screens/alarms/alarm_editor_screen.dart
             cp ci/alarm-only/alarm_ring_screen.dart app/lib/screens/alarm_ring_screen.dart
+            cp ci/alarm-only/notification_service.dart app/lib/services/notification_service.dart
             python3 ci/alarm-only/apply_alarm_only.py
+            python3 ci/alarm-only/apply_reliability.py
             rm -rf app/lib/screens/medications app/lib/screens/tasks app/lib/screens/home
             rm -f app/lib/screens/shell_screen.dart
 
@@ -113,9 +115,17 @@ jobs:
               cp /tmp/ic_launcher.png "app/android/app/src/main/res/mipmap-$density/ic_launcher.png"
             done
 
-            echo '=== VERIFY SCOPE ==='
+            echo '=== VERIFY RELIABILITY SCOPE ==='
             grep -q 'applicationId = "com.waqt.alarm"' app/android/app/build.gradle.kts
-            grep -q "home: const Directionality" app/lib/app.dart
+            grep -q 'android.permission.SCHEDULE_EXACT_ALARM' app/android/app/src/main/AndroidManifest.xml
+            grep -q 'requestExactAlarmsPermission' app/lib/services/notification_service.dart
+            grep -q 'canScheduleExactNotifications' app/lib/services/notification_service.dart
+            grep -q 'pendingNotificationRequests' app/lib/services/notification_service.dart
+            grep -q 'AndroidScheduleMode.exactAllowWhileIdle' app/lib/services/notification_service.dart
+            ! grep -q 'AndroidScheduleMode.inexactAllowWhileIdle' app/lib/services/notification_service.dart
+            grep -q 'RawResourceAndroidNotificationSound' app/lib/services/notification_service.dart
+            grep -q 'previewSound' app/lib/screens/alarms/alarm_editor_screen.dart
+            grep -q 'com.waqt.alarm/audio' app/android/app/src/main/kotlin/com/waqt/alarm/MainActivity.kt
             ! grep -q 'MedicationEditorScreen' app/lib/app.dart
             ! grep -q 'TaskEditorScreen' app/lib/app.dart
             ! test -d app/lib/screens/medications
@@ -128,15 +138,15 @@ jobs:
             echo '=== TEST ==='
             flutter test
             echo '=== BUILD ==='
-            flutter build apk --release --build-name=3.1.0 --build-number=6
+            flutter build apk --release --build-name=3.2.0 --build-number=7
             cd ..
 
-            cp app/build/app/outputs/flutter-apk/app-release.apk ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.1.apk
+            cp app/build/app/outputs/flutter-apk/app-release.apk ci-output-alarm-only/WAQT-Alarm-Reliable-v3.2.apk
             APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
-            "$APKSIGNER" verify --verbose --print-certs ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.1.apk | tee ci-output-alarm-only/signature.txt
-            sha256sum ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.1.apk | tee ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.1.apk.sha256
+            "$APKSIGNER" verify --verbose --print-certs ci-output-alarm-only/WAQT-Alarm-Reliable-v3.2.apk | tee ci-output-alarm-only/signature.txt
+            sha256sum ci-output-alarm-only/WAQT-Alarm-Reliable-v3.2.apk | tee ci-output-alarm-only/WAQT-Alarm-Reliable-v3.2.apk.sha256
             keytool -list -v -keystore app/android/app/waqt-release.jks -storepass waqt2026 -alias waqt | grep 'SHA256:' | tee ci-output-alarm-only/signing-cert.txt
-            ls -lh ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.1.apk
+            ls -lh ci-output-alarm-only/WAQT-Alarm-Reliable-v3.2.apk
             echo SUCCESS > ci-output-alarm-only/status.txt
           ) 2>&1 | tee ci-output-alarm-only/build.log
           result=${PIPESTATUS[0]}
@@ -148,10 +158,10 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: WAQT-Alarm-Samsung-Style-APK
+          name: WAQT-Alarm-Reliable-APK
           path: |
-            ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.1.apk
-            ci-output-alarm-only/WAQT-Alarm-Samsung-Style-v3.1.apk.sha256
+            ci-output-alarm-only/WAQT-Alarm-Reliable-v3.2.apk
+            ci-output-alarm-only/WAQT-Alarm-Reliable-v3.2.apk.sha256
             ci-output-alarm-only/signature.txt
           compression-level: 0
           retention-days: 30
@@ -165,6 +175,6 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -f ci-output-alarm-only
-          git commit -m 'ci: WAQT 12-hour alarm APK [skip ci]' || exit 0
-          git pull --rebase origin waqt-alarm-only-build || { git rebase --abort || true; echo 'Publish skipped due concurrent branch update'; exit 0; }
+          git commit -m 'ci: WAQT reliable alarm APK [skip ci]' || exit 0
+          git status --porcelain
           git push origin HEAD:waqt-alarm-only-build || echo 'Publish skipped due concurrent branch update'
