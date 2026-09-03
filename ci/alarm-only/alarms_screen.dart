@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/utils/time_utils.dart';
 import '../../models/alarm.dart';
 import '../../state/app_state.dart';
 import 'alarm_editor_screen.dart';
@@ -105,9 +104,42 @@ class _AlarmTile extends StatelessWidget {
 
   final AlarmModel alarm;
 
+  static const List<int> _weekOrder = <int>[6, 7, 1, 2, 3, 4, 5];
+  static const Map<int, String> _dayNames = <int, String>{
+    1: 'الاثنين',
+    2: 'الثلاثاء',
+    3: 'الأربعاء',
+    4: 'الخميس',
+    5: 'الجمعة',
+    6: 'السبت',
+    7: 'الأحد',
+  };
+
+  String _format12Hour() {
+    final int hour24 = alarm.minutesOfDay ~/ 60;
+    final int minute = alarm.minutesOfDay % 60;
+    final int hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
+    final String period = hour24 < 12 ? 'صباحًا' : 'مساءً';
+    return '${hour12.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} $period';
+  }
+
+  String _repeatText() {
+    if (alarm.daysOfWeek.isEmpty) return 'مرة واحدة';
+    final Set<int> selected = alarm.daysOfWeek.toSet();
+    if (_weekOrder.every(selected.contains)) return 'كل يوم';
+    const Set<int> workDays = <int>{7, 1, 2, 3, 4};
+    if (selected.length == workDays.length && workDays.every(selected.contains)) {
+      return 'الأحد - الخميس';
+    }
+    return _weekOrder
+        .where(selected.contains)
+        .map((int day) => _dayNames[day]!)
+        .join('، ');
+  }
+
   String _subtitle() {
     final String title = alarm.title.trim();
-    final String repeat = alarm.daysOfWeek.isEmpty ? 'مرة واحدة' : describeWeekdays(alarm.daysOfWeek);
+    final String repeat = _repeatText();
     if (title.isEmpty) return repeat;
     return '$title  •  $repeat';
   }
@@ -139,13 +171,14 @@ class _AlarmTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      formatMinutes(context, alarm.minutesOfDay),
+                      _format12Hour(),
+                      textDirection: TextDirection.ltr,
                       style: Theme.of(context).textTheme.displayMedium?.copyWith(
                             color: mainColor,
-                            fontSize: 48,
-                            height: .95,
+                            fontSize: 42,
+                            height: 1,
                             fontWeight: FontWeight.w400,
-                            letterSpacing: -1.7,
+                            letterSpacing: -1.2,
                           ),
                     ),
                     const SizedBox(height: 10),
