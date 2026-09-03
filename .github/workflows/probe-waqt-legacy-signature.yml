@@ -1,0 +1,141 @@
+name: Probe WAQT Legacy Update Signature
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout alarm-only branch
+        uses: actions/checkout@v4
+        with:
+          ref: waqt-alarm-only-build
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.0'
+          channel: stable
+          cache: true
+
+      - name: Build legacy-signed alarm-only APK
+        shell: bash
+        run: |
+          set -e
+          rm -rf app source ci-output-legacy-probe waqt_v12.b64 waqt_v12.zip
+          mkdir -p ci-output-legacy-probe
+          cat \
+            ci/v12/waqt_source.b64.00 ci/v12/waqt_source.b64.01 \
+            ci/v12/waqt_source.b64.02 ci/v12/waqt_source.b64.03 \
+            ci/v12/waqt_source.b64.04 ci/v12/waqt_source.b64.05a \
+            ci/v12/waqt_source.b64.05b ci/v12/waqt_source.b64.06 \
+            ci/v12/waqt_source.b64.07 ci/v12/waqt_source.b64.08 \
+            ci/v12/waqt_source.b64.09 ci/v12/waqt_source.b64.10 \
+            ci/v12/waqt_source.b64.11 > waqt_v12.b64
+          base64 --decode waqt_v12.b64 > waqt_v12.zip
+          echo '625ac5c43a0ccaa697364ec5de04892dc426466037730a99f76985406e31d762  waqt_v12.zip' | sha256sum --check
+          mkdir source && unzip -q waqt_v12.zip -d source
+
+          python3 - <<'PY'
+          import math, wave, struct
+          from pathlib import Path
+          sr=44100
+          raw=Path('source/waqt_alarm/android/app/src/main/res/raw'); raw.mkdir(parents=True, exist_ok=True)
+          def write(name,duration,freq,amp=.35):
+              n=int(sr*duration)
+              with wave.open(str(raw/f'{name}.wav'),'w') as w:
+                  w.setnchannels(1); w.setsampwidth(2); w.setframerate(sr)
+                  frames=bytearray()
+                  for i in range(n):
+                      t=i/sr; gate=1 if (t%0.7)<0.42 else 0
+                      frames += struct.pack('<h', int(math.sin(2*math.pi*freq*t)*gate*amp*32767))
+                  w.writeframes(frames)
+          write('waqt_classic',4.0,880)
+          write('waqt_soft',4.0,523.25,.22)
+          write('waqt_digital',3.2,1100,.32)
+          PY
+
+          mkdir app
+          cd app
+          flutter create --platforms=android --org com.waqt --project-name waqt_alarm .
+          cd ..
+          cp -R source/waqt_alarm/lib app/
+          rm -rf app/test && cp -R source/waqt_alarm/test app/test
+          cp source/waqt_alarm/pubspec.yaml app/pubspec.yaml
+          cp source/waqt_alarm/analysis_options.yaml app/analysis_options.yaml
+          cp source/waqt_alarm/android/app/src/main/AndroidManifest.xml app/android/app/src/main/AndroidManifest.xml
+          rm -rf app/android/app/src/main/kotlin
+          mkdir -p app/android/app/src/main/kotlin/com/waqt/alarm
+          cp ci/MainActivity.kt app/android/app/src/main/kotlin/com/waqt/alarm/MainActivity.kt
+          mkdir -p app/android/app/src/main/res/drawable app/android/app/src/main/res/raw app/android/app/src/main/res/values app/android/app/src/main/res/values-night
+          cp source/waqt_alarm/android/app/src/main/res/drawable/ic_stat_alarm.xml app/android/app/src/main/res/drawable/
+          cp source/waqt_alarm/android/app/src/main/res/raw/* app/android/app/src/main/res/raw/
+          cp source/waqt_alarm/android/app/src/main/res/values/styles.xml app/android/app/src/main/res/values/styles.xml
+          cp source/waqt_alarm/android/app/src/main/res/values/colors.xml app/android/app/src/main/res/values/colors.xml
+          cp source/waqt_alarm/android/app/src/main/res/values-night/styles.xml app/android/app/src/main/res/values-night/styles.xml
+
+          cp ci/alarm-only/app.dart app/lib/app.dart
+          cp ci/alarm-only/alarms_screen.dart app/lib/screens/alarms/alarms_screen.dart
+          cp ci/alarm-only/alarm_editor_screen.dart app/lib/screens/alarms/alarm_editor_screen.dart
+          python3 ci/alarm-only/apply_alarm_only.py
+          rm -rf app/lib/screens/medications app/lib/screens/tasks app/lib/screens/home
+          rm -f app/lib/screens/shell_screen.dart
+          cp ci/waqt_build.gradle.kts app/android/app/build.gradle.kts
+
+          rm -rf app/android/app/src/main/res/mipmap-*
+          base64 --decode ci/alarm-only/ic_launcher.png.b64 > /tmp/ic_launcher.png
+          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            mkdir -p "app/android/app/src/main/res/mipmap-$density"
+            cp /tmp/ic_launcher.png "app/android/app/src/main/res/mipmap-$density/ic_launcher.png"
+          done
+
+          cd app
+          flutter pub get
+          flutter analyze --no-fatal-infos
+          flutter build apk --release --build-name=2.0.0 --build-number=4
+          cd ..
+
+          cp app/build/app/outputs/flutter-apk/app-release.apk ci-output-legacy-probe/WAQT-Alarm-Only-v2.0-legacy-signed.apk
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --verbose --print-certs ci-output-legacy-probe/WAQT-Alarm-Only-v2.0-legacy-signed.apk | tee ci-output-legacy-probe/signature.txt
+          sha256sum ci-output-legacy-probe/WAQT-Alarm-Only-v2.0-legacy-signed.apk | tee ci-output-legacy-probe/apk.sha256
+          CERT=$(grep 'certificate SHA-256 digest:' ci-output-legacy-probe/signature.txt | head -1 | awk '{print $NF}')
+          echo "$CERT" > ci-output-legacy-probe/cert-sha256.txt
+          echo '27cb08dfe4d332d2e21288ca77b27d9b48db5ed50b1721617c355f8556124a2f' > ci-output-legacy-probe/expected-old-cert-sha256.txt
+          if [ "$CERT" = '27cb08dfe4d332d2e21288ca77b27d9b48db5ed50b1721617c355f8556124a2f' ]; then
+            echo MATCH > ci-output-legacy-probe/update-compatibility.txt
+          else
+            echo MISMATCH > ci-output-legacy-probe/update-compatibility.txt
+          fi
+
+      - name: Publish probe output
+        if: always()
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f ci-output-legacy-probe
+          git commit -m 'ci: legacy signature probe [skip ci]' || exit 0
+          git push origin HEAD:waqt-alarm-only-build
+
+      - name: Upload probe artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WAQT-Legacy-Signature-Probe
+          path: ci-output-legacy-probe
+          compression-level: 0
+          retention-days: 30
