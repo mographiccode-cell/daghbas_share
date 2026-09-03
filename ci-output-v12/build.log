@@ -165,7 +165,7 @@ Try `flutter pub outdated` for more information.
 Upgrading analysis_options.yaml to exclude build and platform directories.
 === ANALYZE ===
 Analyzing app...                                                
-No issues found! (ran in 9.2s)
+No issues found! (ran in 9.8s)
 === TEST ===
 
 ::group::✅ Passing tests
@@ -188,7 +188,7 @@ an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/mig
 If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
 Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 10340 bytes (99.4% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
 Caught exception: Already watching path: /home/runner/work/daghbas_share/daghbas_share/app/android
-Running Gradle task 'assembleRelease'...                          241.3s
+Running Gradle task 'assembleRelease'...                          238.2s
 ✓ Built build/app/outputs/flutter-apk/app-release.apk (56.7MB)
 === APK SIGNATURE VERIFY ===
 Verifies
@@ -200,5 +200,5 @@ Verified using v3.2 scheme (APK Signature Scheme v3.2): false
 Verified using v4 scheme (APK Signature Scheme v4): false
 Verified for SourceStamp: false
 Number of signers: 1
-a8f73ad64d8d4cb9d0bdeef058549652cf26e984aa1a4edcc7a797d01c95462e  ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk
--rw-r--r-- 1 runner runner 55M Sep  3 21:08 ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk
+1707be42019d17f5b4e5d6c42952168023049c3b8563ee7f6a833c020dad57c7  ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk
+-rw-r--r-- 1 runner runner 55M Sep  3 21:13 ci-output-v12/WAQT-Advanced-Alarm-v1.2.apk
