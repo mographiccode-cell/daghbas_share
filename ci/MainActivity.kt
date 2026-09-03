@@ -53,15 +53,15 @@ class MainActivity : FlutterActivity() {
             return
         }
 
-        val safeKey = when (key) {
-            "waqt_soft" -> "waqt_soft"
-            "waqt_digital" -> "waqt_digital"
-            else -> "waqt_classic"
+        // Static references keep the alarm sounds in optimized release APKs.
+        val resId = when (key) {
+            "waqt_soft" -> R.raw.waqt_soft
+            "waqt_digital" -> R.raw.waqt_digital
+            else -> R.raw.waqt_classic
         }
-        val resId = resources.getIdentifier(safeKey, "raw", packageName)
-        if (resId == 0) throw IllegalStateException("Alarm sound resource not found: $safeKey")
 
         val fd = resources.openRawResourceFd(resId)
+            ?: throw IllegalStateException("Unable to open alarm sound resource")
         player = MediaPlayer().apply {
             setAudioAttributes(attributes)
             setDataSource(fd.fileDescriptor, fd.startOffset, fd.length)
