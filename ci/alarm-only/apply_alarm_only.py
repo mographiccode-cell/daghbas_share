@@ -13,15 +13,11 @@ old = '''      alarms = await _database.getAlarms();
         tasks: tasks,
       );'''
 new = '''      alarms = await _database.getAlarms();
-      // Alarm-only edition: do not restore medication/task schedules.
+      // Alarm-only edition. Scheduling is deliberately deferred until the
+      // Android notification/exact-alarm permissions have been checked.
       medications = <MedicationModel>[];
       tasks = <TaskReminder>[];
-      doseLogs = <DoseLog>[];
-      await _notifications.rescheduleAll(
-        alarms: alarms,
-        medications: const <MedicationModel>[],
-        tasks: const <TaskReminder>[],
-      );'''
+      doseLogs = <DoseLog>[];'''
 if old not in s:
     raise SystemExit('load() scheduling block not found')
 s = s.replace(old, new, 1)
@@ -43,11 +39,13 @@ old = '''  Future<void> _reschedule() => _notifications.rescheduleAll(
         medications: medications,
         tasks: tasks,
       );'''
-new = '''  Future<void> _reschedule() => _notifications.rescheduleAll(
+new = '''  Future<void> rescheduleAlarms() => _notifications.rescheduleAll(
         alarms: alarms,
         medications: const <MedicationModel>[],
         tasks: const <TaskReminder>[],
-      );'''
+      );
+
+  Future<void> _reschedule() => rescheduleAlarms();'''
 if old not in s:
     raise SystemExit('_reschedule block not found')
 s = s.replace(old, new, 1)
