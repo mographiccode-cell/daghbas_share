@@ -17,7 +17,15 @@ class AlarmEditorScreen extends StatefulWidget {
 class _AlarmEditorScreenState extends State<AlarmEditorScreen> {
   static const Color _samsungBlue = Color(0xFF3B7CFF);
   static const List<int> _weekOrder = <int>[6, 7, 1, 2, 3, 4, 5];
-  static const List<String> _weekLabels = <String>['س', 'ح', 'ن', 'ث', 'ر', 'خ', 'ج'];
+  static const List<String> _weekLabels = <String>[
+    'السبت',
+    'الأحد',
+    'الاثنين',
+    'الثلاثاء',
+    'الأربعاء',
+    'الخميس',
+    'الجمعة',
+  ];
 
   late final TextEditingController _title;
   late int _minutes;
@@ -47,6 +55,31 @@ class _AlarmEditorScreenState extends State<AlarmEditorScreen> {
   int _defaultTime() {
     final DateTime now = DateTime.now().add(const Duration(minutes: 5));
     return now.hour * 60 + now.minute;
+  }
+
+  int _hour12(int hour24) {
+    final int value = hour24 % 12;
+    return value == 0 ? 12 : value;
+  }
+
+  bool get _isPm => (_minutes ~/ 60) >= 12;
+
+  void _setHour12(int hour12) {
+    final int minute = _minutes % 60;
+    final int hour24 = (_isPm ? 12 : 0) + (hour12 % 12);
+    setState(() => _minutes = hour24 * 60 + minute);
+  }
+
+  void _setMinute(int minute) {
+    final int hour24 = _minutes ~/ 60;
+    setState(() => _minutes = hour24 * 60 + minute);
+  }
+
+  void _setPeriod(bool pm) {
+    final int hour12 = _hour12(_minutes ~/ 60);
+    final int minute = _minutes % 60;
+    final int hour24 = (pm ? 12 : 0) + (hour12 % 12);
+    setState(() => _minutes = hour24 * 60 + minute);
   }
 
   @override
@@ -270,8 +303,9 @@ class _AlarmEditorScreenState extends State<AlarmEditorScreen> {
   @override
   Widget build(BuildContext context) {
     final ColorScheme colors = Theme.of(context).colorScheme;
-    final int hour = _minutes ~/ 60;
+    final int hour24 = _minutes ~/ 60;
     final int minute = _minutes % 60;
+    final int hour12 = _hour12(hour24);
 
     return Scaffold(
       body: SafeArea(
@@ -305,13 +339,14 @@ class _AlarmEditorScreenState extends State<AlarmEditorScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 6, 16, 30),
                 children: <Widget>[
                   Container(
-                    height: 220,
+                    height: 286,
                     decoration: BoxDecoration(
                       color: colors.surface,
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: Column(
                       children: <Widget>[
+                        const SizedBox(height: 8),
                         Expanded(
                           child: Directionality(
                             textDirection: TextDirection.ltr,
@@ -319,10 +354,10 @@ class _AlarmEditorScreenState extends State<AlarmEditorScreen> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: <Widget>[
                                 _NumberWheel(
-                                  value: hour,
-                                  count: 24,
-                                  formatter: (int value) => value.toString().padLeft(2, '0'),
-                                  onChanged: (int value) => setState(() => _minutes = value * 60 + minute),
+                                  value: hour12 - 1,
+                                  count: 12,
+                                  formatter: (int index) => (index + 1).toString().padLeft(2, '0'),
+                                  onChanged: (int index) => _setHour12(index + 1),
                                 ),
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 4),
@@ -338,14 +373,22 @@ class _AlarmEditorScreenState extends State<AlarmEditorScreen> {
                                   value: minute,
                                   count: 60,
                                   formatter: (int value) => value.toString().padLeft(2, '0'),
-                                  onChanged: (int value) => setState(() => _minutes = hour * 60 + value),
+                                  onChanged: _setMinute,
                                 ),
                               ],
                             ),
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.symmetric(horizontal: 42),
+                          child: _PeriodSelector(
+                            isPm: _isPm,
+                            onChanged: _setPeriod,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
                           child: Text(
                             _remainingText(),
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -367,6 +410,14 @@ class _AlarmEditorScreenState extends State<AlarmEditorScreen> {
                         } else {
                           _days = List<int>.from(_days)..add(day);
                         }
+                      });
+                    },
+                    onToggleAll: () {
+                      setState(() {
+                        _selectedDate = null;
+                        _days = _days.length == _weekOrder.length
+                            ? <int>[]
+                            : List<int>.from(_weekOrder);
                       });
                     },
                   ),
@@ -467,18 +518,24 @@ class _NumberWheel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
     return SizedBox(
-      width: 92,
+      width: 104,
       child: CupertinoPicker(
         scrollController: FixedExtentScrollController(initialItem: value),
-        itemExtent: 54,
-        diameterRatio: 1.3,
-        squeeze: 1.05,
+        itemExtent: 58,
+        diameterRatio: 1.45,
+        squeeze: 1.0,
+        useMagnifier: true,
+        magnification: 1.07,
         selectionOverlay: Container(
           margin: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHigh.withValues(alpha: .72),
-            borderRadius: BorderRadius.circular(14),
+            color: _AlarmEditorScreenState._samsungBlue.withValues(alpha: .10),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: _AlarmEditorScreenState._samsungBlue.withValues(alpha: .18),
+            ),
           ),
         ),
         onSelectedItemChanged: onChanged,
@@ -488,8 +545,10 @@ class _NumberWheel extends StatelessWidget {
             child: Text(
               formatter(index),
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontSize: 34,
+                    color: colors.onSurface,
+                    fontSize: 36,
                     fontWeight: FontWeight.w400,
+                    fontFeatures: const <FontFeature>[],
                   ),
             ),
           ),
@@ -499,17 +558,93 @@ class _NumberWheel extends StatelessWidget {
   }
 }
 
-class _RepeatCard extends StatelessWidget {
-  const _RepeatCard({required this.selected, required this.onToggle});
+class _PeriodSelector extends StatelessWidget {
+  const _PeriodSelector({required this.isPm, required this.onChanged});
 
-  final List<int> selected;
-  final ValueChanged<int> onToggle;
+  final bool isPm;
+  final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final ColorScheme colors = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
+      height: 46,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(23),
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: _PeriodButton(
+              label: 'صباحًا',
+              selected: !isPm,
+              onTap: () => onChanged(false),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _PeriodButton(
+              label: 'مساءً',
+              selected: isPm,
+              onTap: () => onChanged(true),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PeriodButton extends StatelessWidget {
+  const _PeriodButton({required this.label, required this.selected, required this.onTap});
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    return Material(
+      color: selected ? _AlarmEditorScreenState._samsungBlue : Colors.transparent,
+      borderRadius: BorderRadius.circular(19),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(19),
+        onTap: onTap,
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? Colors.white : colors.onSurface.withValues(alpha: .68),
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RepeatCard extends StatelessWidget {
+  const _RepeatCard({
+    required this.selected,
+    required this.onToggle,
+    required this.onToggleAll,
+  });
+
+  final List<int> selected;
+  final ValueChanged<int> onToggle;
+  final VoidCallback onToggleAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    final bool allSelected = selected.length == _AlarmEditorScreenState._weekOrder.length;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(24),
@@ -517,30 +652,46 @@ class _RepeatCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('تكرار', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 14),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  'تكرار',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              TextButton(
+                onPressed: onToggleAll,
+                child: Text(allSelected ? 'مسح' : 'كل الأيام'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            alignment: WrapAlignment.start,
+            spacing: 8,
+            runSpacing: 9,
             children: List<Widget>.generate(_AlarmEditorScreenState._weekOrder.length, (int index) {
               final int day = _AlarmEditorScreenState._weekOrder[index];
               final bool active = selected.contains(day);
-              return InkWell(
-                borderRadius: BorderRadius.circular(22),
-                onTap: () => onToggle(day),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  width: 40,
-                  height: 40,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: active ? _AlarmEditorScreenState._samsungBlue : colors.surfaceContainerHigh,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    _AlarmEditorScreenState._weekLabels[index],
-                    style: TextStyle(
-                      color: active ? Colors.white : colors.onSurface.withValues(alpha: .68),
-                      fontWeight: FontWeight.w700,
+              return Material(
+                color: active
+                    ? _AlarmEditorScreenState._samsungBlue
+                    : colors.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(20),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => onToggle(day),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    child: Text(
+                      _AlarmEditorScreenState._weekLabels[index],
+                      style: TextStyle(
+                        color: active ? Colors.white : colors.onSurface.withValues(alpha: .72),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
