@@ -65,15 +65,24 @@ class _AlarmRingScreenState extends State<AlarmRingScreen> {
       'type': 'alarm',
       'id': widget.alarmId,
       'scheduledAt': DateTime.now().add(Duration(minutes: minutes)).millisecondsSinceEpoch,
+      'soundKey': alarm?.soundKey ?? 'waqt_classic',
+      'vibration': alarm?.vibration ?? true,
     });
-    await NotificationService.instance.snooze(
-      currentNotificationId: widget.notificationId,
-      payload: payload,
-      duration: Duration(minutes: minutes),
-      title: alarm?.title.trim().isEmpty ?? true ? 'منبه' : alarm!.title.trim(),
-      body: 'انتهت الغفوة.',
-      alarm: true,
-    );
+    try {
+      await NotificationService.instance.snooze(
+        currentNotificationId: widget.notificationId,
+        payload: payload,
+        duration: Duration(minutes: minutes),
+        title: alarm?.title.trim().isEmpty ?? true ? 'منبه' : alarm!.title.trim(),
+        body: 'انتهت الغفوة.',
+        alarm: true,
+      );
+    } on AlarmSchedulingException catch (e) {
+      if (!mounted) return;
+      setState(() => _working = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      return;
+    }
     if (mounted) Navigator.of(context).pop();
   }
 
