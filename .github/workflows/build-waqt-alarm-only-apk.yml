@@ -1,9 +1,9 @@
-name: Build WAQT Alarm Only APK
+name: Build WAQT v3.2 Direct
 
 on:
-  pull_request:
+  push:
     branches:
-      - main
+      - waqt-v32-direct-build
 
 permissions:
   contents: write
@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
-      - name: Checkout alarm-only branch
+      - name: Checkout direct build branch
         uses: actions/checkout@v4
         with:
-          ref: waqt-alarm-only-build
+          ref: waqt-v32-direct-build
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -165,16 +165,3 @@ jobs:
             ci-output-alarm-only/signature.txt
           compression-level: 0
           retention-days: 30
-
-      - name: Publish output
-        if: always()
-        shell: bash
-        run: |
-          mkdir -p ci-output-alarm-only
-          if [ ! -f ci-output-alarm-only/status.txt ]; then echo 'FAILED:setup-or-runner' > ci-output-alarm-only/status.txt; fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -f ci-output-alarm-only
-          git commit -m 'ci: WAQT reliable alarm APK [skip ci]' || exit 0
-          git status --porcelain
-          git push origin HEAD:waqt-alarm-only-build || echo 'Publish skipped due concurrent branch update'
