@@ -116,7 +116,6 @@ jobs:
             echo '=== VERIFY SCOPE ==='
             grep -q 'applicationId = "com.waqt.alarm"' app/android/app/build.gradle.kts
             grep -q "home: const Directionality" app/lib/app.dart
-            grep -q "One UI" .github/workflows/build-waqt-alarm-only-apk.yml || true
             ! grep -q 'MedicationEditorScreen' app/lib/app.dart
             ! grep -q 'TaskEditorScreen' app/lib/app.dart
             ! test -d app/lib/screens/medications
@@ -145,18 +144,6 @@ jobs:
           echo "pipeline_exit=$result" >> ci-output-alarm-only/status.txt
           exit "$result"
 
-      - name: Publish output
-        if: always()
-        shell: bash
-        run: |
-          mkdir -p ci-output-alarm-only
-          if [ ! -f ci-output-alarm-only/status.txt ]; then echo 'FAILED:setup-or-runner' > ci-output-alarm-only/status.txt; fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -f ci-output-alarm-only
-          git commit -m 'ci: WAQT Samsung-style alarm APK [skip ci]' || exit 0
-          git push origin HEAD:waqt-alarm-only-build
-
       - name: Upload APK artifact
         if: success()
         uses: actions/upload-artifact@v4
@@ -168,3 +155,16 @@ jobs:
             ci-output-alarm-only/signature.txt
           compression-level: 0
           retention-days: 30
+
+      - name: Publish output
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p ci-output-alarm-only
+          if [ ! -f ci-output-alarm-only/status.txt ]; then echo 'FAILED:setup-or-runner' > ci-output-alarm-only/status.txt; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f ci-output-alarm-only
+          git commit -m 'ci: WAQT Samsung-style alarm APK [skip ci]' || exit 0
+          git pull --rebase origin waqt-alarm-only-build || { git rebase --abort || true; echo 'Publish skipped due concurrent branch update'; exit 0; }
+          git push origin HEAD:waqt-alarm-only-build || echo 'Publish skipped due concurrent branch update'
