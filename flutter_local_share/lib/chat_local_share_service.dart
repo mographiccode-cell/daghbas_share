@@ -1436,6 +1436,22 @@ class LocalShareService extends ChangeNotifier {
     }
   }
 
+  Future<void> shareFile(ChatMessage message) async {
+    if (!Platform.isAndroid || !message.isIncoming || !message.isFile) {
+      throw UnsupportedError(
+        'مشاركة الملفات من LocalShare متاحة على Android للملفات المستلمة',
+      );
+    }
+    final uri = message.localPath;
+    if (uri == null || !uri.startsWith('content://')) {
+      throw const FileSystemException('الملف غير متاح للمشاركة');
+    }
+    await _native.invokeMethod<void>('shareUri', {
+      'uri': uri,
+      'name': message.fileName ?? 'LocalShare file',
+    });
+  }
+
   Future<void> openLink(String rawUrl) async {
     final uri = Uri.tryParse(rawUrl.trim());
     if (uri == null ||
