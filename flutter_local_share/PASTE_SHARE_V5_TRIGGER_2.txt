@@ -1,0 +1,1 @@
+Rerun LocalShare 1.4 validation after CI format adjustment.
