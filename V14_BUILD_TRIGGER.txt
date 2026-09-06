@@ -1,0 +1,1 @@
+LocalShare 1.4 background/share/paste validation trigger.
