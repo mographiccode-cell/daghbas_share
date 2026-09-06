@@ -1,0 +1,227 @@
+name: LocalShare 1.4 Background Messaging
+
+on:
+  push:
+    branches: [localshare-1.4-background-share]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: localshare-1.4-background-share
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Apply LocalShare 1.4 source changes
+        shell: bash
+        run: |
+          if ! grep -q "Future<void> shareFile(ChatMessage message)" flutter_local_share/lib/chat_local_share_service.dart; then
+            python flutter_local_share/tools/apply_localshare_v14.py
+          fi
+          cd flutter_local_share
+          flutter pub get
+          dart format lib test
+          flutter analyze --fatal-warnings --no-fatal-infos
+          flutter test
+      - name: Commit validated source
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add flutter_local_share/lib flutter_local_share/pubspec.lock
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "feat(localshare): background messaging, share sheet and rich paste"
+          git push origin HEAD:localshare-1.4-background-share
+
+  android:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: localshare-1.4-background-share
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android project
+        shell: bash
+        run: |
+          rm -rf generated
+          flutter create --org com.mographiccode --project-name local_share --platforms=android generated
+          rm -rf generated/lib generated/test
+          cp -r flutter_local_share/lib generated/lib
+          cp -r flutter_local_share/test generated/test
+          cp flutter_local_share/pubspec.yaml generated/pubspec.yaml
+          cp flutter_local_share/overrides/AndroidManifest.xml generated/android/app/src/main/AndroidManifest.xml
+          mkdir -p generated/android/app/src/main/kotlin/com/mographiccode/local_share
+          cp flutter_local_share/overrides/MainActivity.kt generated/android/app/src/main/kotlin/com/mographiccode/local_share/MainActivity.kt
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('generated/android/app/build.gradle.kts')
+          s=p.read_text()
+          s=s.replace('minSdk = flutter.minSdkVersion', 'minSdk = 29')
+          if 'isCoreLibraryDesugaringEnabled = true' not in s:
+              s=s.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")' not in s:
+              s += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")\n}\n'
+          p.write_text(s)
+          PY
+          python -m pip install --quiet pillow
+          python flutter_local_share/tools/generate_localshare_icon.py localshare_icon.png
+          python - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          src=Image.open('localshare_icon.png').convert('RGBA')
+          for dpi,size in [('mdpi',48),('hdpi',72),('xhdpi',96),('xxhdpi',144),('xxxhdpi',192)]:
+              p=Path(f'generated/android/app/src/main/res/mipmap-{dpi}/ic_launcher.png')
+              p.parent.mkdir(parents=True,exist_ok=True)
+              src.resize((size,size),Image.Resampling.LANCZOS).save(p)
+          PY
+      - name: Analyze test and build APK
+        shell: bash
+        run: |
+          cd generated
+          flutter pub get
+          flutter analyze --fatal-warnings --no-fatal-infos
+          flutter test
+          flutter build apk --release
+          unzip -t build/app/outputs/flutter-apk/app-release.apk >/dev/null
+          cd ..
+          cp generated/build/app/outputs/flutter-apk/app-release.apk LocalShare-1.4-Android.apk
+          sha256sum LocalShare-1.4-Android.apk > LocalShare-1.4-Android.apk.sha256
+          grep -q 'FOREGROUND_SERVICE_CONNECTED_DEVICE' flutter_local_share/overrides/AndroidManifest.xml
+          grep -q 'android.intent.action.SEND_MULTIPLE' flutter_local_share/overrides/AndroidManifest.xml
+      - name: Emulator background smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            adb install -r LocalShare-1.4-Android.apk
+            adb shell pm grant com.mographiccode.local_share android.permission.POST_NOTIFICATIONS || true
+            adb shell dumpsys deviceidle whitelist +com.mographiccode.local_share || true
+            adb shell am start -n com.mographiccode.local_share/.MainActivity
+            sleep 10
+            adb shell input keyevent KEYCODE_HOME
+            sleep 5
+            adb shell pidof com.mographiccode.local_share
+            adb shell dumpsys activity services com.mographiccode.local_share | grep -q IsolateHolderService
+            adb shell am force-stop com.mographiccode.local_share
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LocalShare-1.4-Android
+          path: |
+            LocalShare-1.4-Android.apk
+            LocalShare-1.4-Android.apk.sha256
+
+  windows:
+    needs: prepare
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: localshare-1.4-background-share
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Windows project
+        shell: pwsh
+        run: |
+          if (Test-Path generated) { Remove-Item generated -Recurse -Force }
+          flutter create --org com.mographiccode --project-name local_share --platforms=windows generated
+          Remove-Item generated/lib -Recurse -Force
+          Remove-Item generated/test -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item flutter_local_share/lib generated/lib -Recurse
+          Copy-Item flutter_local_share/test generated/test -Recurse
+          Copy-Item flutter_local_share/pubspec.yaml generated/pubspec.yaml -Force
+          python flutter_local_share/tools/patch_windows_temp_cleanup.py generated/windows/runner/main.cpp
+          python -m pip install --quiet pillow
+          python flutter_local_share/tools/generate_localshare_icon.py localshare_icon.png
+          @'
+          from PIL import Image
+          from pathlib import Path
+          src=Image.open('localshare_icon.png').convert('RGBA')
+          out=Path('generated/windows/runner/resources/app_icon.ico')
+          src.save(out,sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+          '@ | Set-Content icon_build.py -Encoding UTF8
+          python icon_build.py
+      - name: Analyze test and build Windows
+        shell: pwsh
+        run: |
+          Push-Location generated
+          flutter pub get
+          flutter analyze --fatal-warnings --no-fatal-infos
+          flutter test
+          flutter build windows --release
+          Pop-Location
+      - name: Verify close-to-background behavior
+        shell: pwsh
+        run: |
+          $exe=(Resolve-Path 'generated/build/windows/x64/runner/Release/local_share.exe').Path
+          $p=Start-Process $exe -PassThru
+          Start-Sleep -Seconds 8
+          $p.Refresh()
+          if ($p.HasExited) { throw 'LocalShare exited before background test' }
+          $null=$p.CloseMainWindow()
+          Start-Sleep -Seconds 4
+          $p.Refresh()
+          if ($p.HasExited) { throw 'Closing the LocalShare window terminated the background process' }
+          Stop-Process -Id $p.Id -Force
+      - name: Build installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          $release=(Resolve-Path 'generated/build/windows/x64/runner/Release').Path
+          $icon=(Resolve-Path 'generated/windows/runner/resources/app_icon.ico').Path
+          $iss=@"
+          [Setup]
+          AppId={{8D2D488C-246B-4BDC-8C24-7B10A65B9649}
+          AppName=LocalShare
+          AppVersion=1.4.0
+          AppPublisher=MographicCode LocalShare
+          DefaultDirName={autopf}\LocalShare
+          DefaultGroupName=LocalShare
+          OutputDir=$($PWD.Path)\artifacts
+          OutputBaseFilename=LocalShare-1.4-Windows-Setup
+          SetupIconFile=$icon
+          Compression=lzma2
+          SolidCompression=yes
+          WizardStyle=modern
+          ArchitecturesAllowed=x64compatible
+          ArchitecturesInstallIn64BitMode=x64compatible
+          PrivilegesRequired=admin
+          UninstallDisplayIcon={app}\local_share.exe
+          [Files]
+          Source: "$release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+          [Icons]
+          Name: "{autoprograms}\LocalShare"; Filename: "{app}\local_share.exe"; WorkingDir: "{app}"; IconFilename: "{app}\local_share.exe"
+          Name: "{autodesktop}\LocalShare"; Filename: "{app}\local_share.exe"; WorkingDir: "{app}"; IconFilename: "{app}\local_share.exe"
+          [Run]
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""LocalShare TCP"" dir=in action=allow protocol=TCP localport=40404 profile=private"; Flags: runhidden
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""LocalShare UDP Discovery"" dir=in action=allow protocol=UDP localport=40405 profile=private"; Flags: runhidden
+          [UninstallRun]
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare TCP"""; Flags: runhidden; RunOnceId: "RemoveLocalShareTcp"
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare UDP Discovery"""; Flags: runhidden; RunOnceId: "RemoveLocalShareUdp"
+          "@
+          Set-Content installer.iss $iss -Encoding UTF8
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-FileHash artifacts/LocalShare-1.4-Windows-Setup.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  LocalShare-1.4-Windows-Setup.exe" } | Set-Content artifacts/LocalShare-1.4-Windows-Setup.exe.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LocalShare-1.4-Windows
+          path: |
+            artifacts/LocalShare-1.4-Windows-Setup.exe
+            artifacts/LocalShare-1.4-Windows-Setup.exe.sha256
