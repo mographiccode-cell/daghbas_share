@@ -1,9 +1,8 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:pasteboard/pasteboard.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:super_clipboard/super_clipboard.dart';
 
 class ClipboardPasteResult {
   const ClipboardPasteResult({this.files = const [], this.text});
@@ -13,66 +12,43 @@ class ClipboardPasteResult {
 
 class LocalShareClipboard {
   static Future<ClipboardPasteResult> read() async {
-    final clipboard = SystemClipboard.instance;
-    if (clipboard == null) return const ClipboardPasteResult();
-    final reader = await clipboard.read();
     final files = <File>[];
 
-    for (final item in reader.items) {
-      if (item.canProvide(Formats.fileUri)) {
-        final uri = await item.readValue(Formats.fileUri);
-        if (uri != null && uri.scheme == 'file') {
-          final file = File.fromUri(uri);
-          if (await file.exists()) files.add(file);
-        }
-        continue;
+    try {
+      final paths = await Pasteboard.files();
+      for (final path in paths) {
+        if (path.trim().isEmpty) continue;
+        final file = File(path);
+        if (await file.exists()) files.add(file);
       }
-
-      if (item.canProvide(Formats.png)) {
-        final file = await _materializePng(item);
-        if (file != null) files.add(file);
-      }
-    }
+    } catch (_) {}
 
     if (files.isNotEmpty) return ClipboardPasteResult(files: files);
-    final text = await reader.readValue(Formats.plainText);
-    return ClipboardPasteResult(text: text);
-  }
 
-  static Future<File?> _materializePng(ClipboardDataReader item) async {
-    final completer = Completer<File?>();
-    final temp = await getTemporaryDirectory();
-    final folder = Directory(
-      '${temp.path}${Platform.pathSeparator}LocalShare${Platform.pathSeparator}clipboard',
-    );
-    await folder.create(recursive: true);
-    final name = 'pasted-${DateTime.now().microsecondsSinceEpoch}.png';
-    final out = File('${folder.path}${Platform.pathSeparator}$name');
+    try {
+      final imageBytes = await Pasteboard.image;
+      if (imageBytes != null && imageBytes.isNotEmpty) {
+        final temp = await getTemporaryDirectory();
+        final folder = Directory(
+          '${temp.path}${Platform.pathSeparator}LocalShare${Platform.pathSeparator}clipboard',
+        );
+        await folder.create(recursive: true);
+        final out = File(
+          '${folder.path}${Platform.pathSeparator}pasted-${DateTime.now().microsecondsSinceEpoch}.png',
+        );
+        await out.writeAsBytes(imageBytes, flush: true);
+        return ClipboardPasteResult(files: [out]);
+      }
+    } catch (_) {}
 
-    final progress = item.getFile(
-      Formats.png,
-      (dataFile) async {
-        try {
-          final sink = out.openWrite();
-          await for (final chunk in dataFile.getStream()) {
-            sink.add(chunk);
-          }
-          await sink.flush();
-          await sink.close();
-          completer.complete(out);
-        } catch (_) {
-          if (!completer.isCompleted) completer.complete(null);
-        }
-      },
-      onError: (_) {
-        if (!completer.isCompleted) completer.complete(null);
-      },
-    );
-    if (progress == null && !completer.isCompleted) return null;
-    return completer.future.timeout(
-      const Duration(seconds: 10),
-      onTimeout: () => null,
-    );
+    try {
+      final text = await Pasteboard.text;
+      if (text != null && text.isNotEmpty) {
+        return ClipboardPasteResult(text: text);
+      }
+    } catch (_) {}
+
+    return const ClipboardPasteResult();
   }
 }
 
