@@ -11,8 +11,8 @@ if '#include <flutter/method_channel.h>' not in text:
     includes = '''#include "flutter_window.h"\n\n#include <flutter/method_channel.h>\n#include <flutter/standard_method_codec.h>\n#include <shellapi.h>\n\n#include <memory>\n#include <string>\n#include <vector>\n'''
     text = text.replace(marker, includes, 1)
 
-helper_marker = 'namespace {\n'
-helper_code = r'''namespace {
+helper_code = r'''
+namespace {
 
 std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
     g_local_share_native_channel;
@@ -37,7 +37,7 @@ flutter::EncodableList ClipboardFiles() {
 
   const HANDLE data = ::GetClipboardData(CF_HDROP);
   if (data != nullptr) {
-    const HDROP drop = reinterpret_cast<HDROP>(data);
+    const HDROP drop = static_cast<HDROP>(data);
     const UINT count = ::DragQueryFileW(drop, 0xFFFFFFFF, nullptr, 0);
     for (UINT index = 0; index < count; ++index) {
       const UINT length = ::DragQueryFileW(drop, index, nullptr, 0);
@@ -54,12 +54,20 @@ flutter::EncodableList ClipboardFiles() {
   ::CloseClipboard();
   return files;
 }
+
+}  // namespace
+
 '''
 
 if 'flutter::EncodableList ClipboardFiles()' not in text:
-    if helper_marker not in text:
-        raise SystemExit('namespace marker not found')
-    text = text.replace(helper_marker, helper_code, 1)
+    generated_include = '#include "flutter/generated_plugin_registrant.h"\n'
+    if generated_include in text:
+        text = text.replace(generated_include, generated_include + helper_code, 1)
+    else:
+        first_method = 'FlutterWindow::FlutterWindow('
+        if first_method not in text:
+            raise SystemExit('FlutterWindow method marker not found')
+        text = text.replace(first_method, helper_code + first_method, 1)
 
 register_marker = '  RegisterPlugins(flutter_controller_->engine());\n'
 register_code = r'''  RegisterPlugins(flutter_controller_->engine());
