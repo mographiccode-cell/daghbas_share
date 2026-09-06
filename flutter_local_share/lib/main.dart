@@ -622,6 +622,9 @@ class _ChatPaneState extends State<_ChatPane> {
     super.initState();
     controller.addListener(_refreshComposer);
     scrollController.addListener(_handleScroll);
+    if (Platform.isWindows) {
+      HardwareKeyboard.instance.addHandler(_handlePasteShortcut);
+    }
   }
 
   @override
@@ -665,6 +668,9 @@ class _ChatPaneState extends State<_ChatPane> {
   void dispose() {
     controller.removeListener(_refreshComposer);
     scrollController.removeListener(_handleScroll);
+    if (Platform.isWindows) {
+      HardwareKeyboard.instance.removeHandler(_handlePasteShortcut);
+    }
     controller.dispose();
     scrollController.dispose();
     super.dispose();
@@ -696,6 +702,65 @@ class _ChatPaneState extends State<_ChatPane> {
       if (mounted) _showError(context, e);
     } finally {
       if (mounted) setState(() => pickingFiles = false);
+    }
+  }
+
+  bool _handlePasteShortcut(KeyEvent event) {
+    if (!Platform.isWindows || event is! KeyDownEvent) return false;
+    if (event.logicalKey != LogicalKeyboardKey.keyV ||
+        !HardwareKeyboard.instance.isControlPressed) {
+      return false;
+    }
+    unawaited(_pasteFromClipboard());
+    return true;
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    try {
+      final files = await widget.service.clipboardFiles();
+      if (files.isNotEmpty) {
+        if (pickingFiles) return;
+        if (mounted) setState(() => pickingFiles = true);
+        try {
+          await widget.service.sendFiles(widget.peer, files);
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _jumpToLatest(animated: true),
+          );
+        } finally {
+          if (mounted) setState(() => pickingFiles = false);
+        }
+        return;
+      }
+
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      final clipboardText = data?.text;
+      if (clipboardText == null || clipboardText.isEmpty) return;
+      final current = controller.text;
+      var start = controller.selection.isValid
+          ? controller.selection.start
+          : current.length;
+      var end = controller.selection.isValid
+          ? controller.selection.end
+          : current.length;
+      if (start < 0) start = 0;
+      if (end < 0) end = 0;
+      if (start > current.length) start = current.length;
+      if (end > current.length) end = current.length;
+      if (start > end) {
+        final swap = start;
+        start = end;
+        end = swap;
+      }
+      final merged = current.replaceRange(start, end, clipboardText);
+      final bounded = merged.length <= 4096 ? merged : merged.substring(0, 4096);
+      var caret = start + clipboardText.length;
+      if (caret > bounded.length) caret = bounded.length;
+      controller.value = TextEditingValue(
+        text: bounded,
+        selection: TextSelection.collapsed(offset: caret),
+      );
+    } catch (e) {
+      if (mounted) _showError(context, e);
     }
   }
 
@@ -786,6 +851,7 @@ class _ChatPaneState extends State<_ChatPane> {
             controller: controller,
             pickingFiles: pickingFiles,
             onAttach: _sendFiles,
+            onPaste: Platform.isWindows ? _pasteFromClipboard : null,
             onSend: _sendText,
           ),
         ],
@@ -896,11 +962,13 @@ class _ChatComposer extends StatelessWidget {
     required this.pickingFiles,
     required this.onAttach,
     required this.onSend,
+    this.onPaste,
   });
   final TextEditingController controller;
   final bool pickingFiles;
   final VoidCallback onAttach;
   final VoidCallback onSend;
+  final VoidCallback? onPaste;
 
   @override
   Widget build(BuildContext context) {
@@ -939,6 +1007,12 @@ class _ChatComposer extends StatelessWidget {
                               )
                             : const Icon(Icons.attach_file_rounded),
                       ),
+                      if (onPaste != null)
+                        IconButton(
+                          tooltip: 'لصق نص أو ملفات (Ctrl+V)',
+                          onPressed: pickingFiles ? null : onPaste,
+                          icon: const Icon(Icons.content_paste_rounded),
+                        ),
                       Expanded(
                         child: TextField(
                           controller: controller,
@@ -1152,7 +1226,21 @@ class _TextMessageContent extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 4),
-        _MessageMeta(message: message, foreground: foreground),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _MessageMeta(message: message, foreground: foreground),
+            const SizedBox(width: 4),
+            IconButton(
+              tooltip: 'نسخ الرسالة',
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              padding: EdgeInsets.zero,
+              onPressed: () => _copyMessage(context, message),
+              icon: const Icon(Icons.copy_rounded, size: 14),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -1246,8 +1334,14 @@ class _FileMessageContent extends StatelessWidget {
                   Icons.refresh_rounded,
                   color: Color(0xFFC62828),
                 ),
-              )
-            else if (message.isIncoming && message.canOpenFile)
+              ),
+            if (Platform.isAndroid && message.canOpenFile)
+              IconButton(
+                tooltip: 'مشاركة الملف',
+                onPressed: () => _shareFile(context),
+                icon: const Icon(Icons.share_rounded),
+              ),
+            if (message.isIncoming && message.canOpenFile)
               IconButton(
                 tooltip: 'فتح الملف',
                 onPressed: () => _openFile(context),
@@ -1354,6 +1448,14 @@ class _FileMessageContent extends StatelessWidget {
   Future<void> _openFile(BuildContext context) async {
     try {
       await service.openFile(message);
+    } catch (e) {
+      if (context.mounted) _showError(context, e);
+    }
+  }
+
+  Future<void> _shareFile(BuildContext context) async {
+    try {
+      await service.shareFile(message);
     } catch (e) {
       if (context.mounted) _showError(context, e);
     }
@@ -1881,17 +1983,22 @@ Future<void> _showMessageActions(
     builder: (context) => SafeArea(
       child: Wrap(
         children: [
-          if (!message.isFile)
-            ListTile(
-              leading: const Icon(Icons.copy_rounded),
-              title: const Text('نسخ'),
-              onTap: () => Navigator.pop(context, 'copy'),
-            ),
+          ListTile(
+            leading: const Icon(Icons.copy_rounded),
+            title: Text(message.isFile ? 'نسخ اسم الملف' : 'نسخ الرسالة'),
+            onTap: () => Navigator.pop(context, 'copy'),
+          ),
           if (message.kind == ChatMessageKind.link)
             ListTile(
               leading: const Icon(Icons.open_in_new_rounded),
               title: const Text('فتح الرابط'),
               onTap: () => Navigator.pop(context, 'open'),
+            ),
+          if (Platform.isAndroid && message.isFile && message.canOpenFile)
+            ListTile(
+              leading: const Icon(Icons.share_rounded),
+              title: const Text('مشاركة الملف'),
+              onTap: () => Navigator.pop(context, 'share-file'),
             ),
           if (message.canRetry)
             ListTile(
@@ -1905,11 +2012,12 @@ Future<void> _showMessageActions(
   );
   if (!context.mounted || action == null) return;
   if (action == 'copy') {
-    await Clipboard.setData(ClipboardData(text: message.text));
-    if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('تم النسخ')));
+    await _copyMessage(context, message);
+  } else if (action == 'share-file') {
+    try {
+      await service.shareFile(message);
+    } catch (e) {
+      if (context.mounted) _showError(context, e);
     }
   } else if (action == 'open') {
     await _confirmAndOpenLink(context, service, message.text);
@@ -1917,6 +2025,16 @@ Future<void> _showMessageActions(
     try {
       await service.retryMessage(peer, message);
     } catch (_) {}
+  }
+}
+
+Future<void> _copyMessage(BuildContext context, ChatMessage message) async {
+  final value = message.isFile ? (message.fileName ?? 'ملف') : message.text;
+  await Clipboard.setData(ClipboardData(text: value));
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message.isFile ? 'تم نسخ اسم الملف' : 'تم نسخ الرسالة')),
+    );
   }
 }
 

@@ -1211,11 +1211,36 @@ class LocalShareService extends ChangeNotifier {
       withReadStream: false,
     );
     if (result == null) return;
+    final files = <File>[];
     for (final picked in result.files) {
       final path = picked.path;
       if (path == null || path.isEmpty) continue;
-      await sendFile(peer, File(path));
+      files.add(File(path));
     }
+    await sendFiles(peer, files);
+  }
+
+  Future<void> sendFiles(Peer peer, Iterable<File> files) async {
+    for (final file in files) {
+      if (!await file.exists()) continue;
+      await sendFile(peer, file);
+    }
+  }
+
+  Future<List<File>> clipboardFiles() async {
+    if (!Platform.isWindows) return const <File>[];
+    final values = await _native.invokeMethod<List<dynamic>>(
+      'getClipboardFiles',
+    );
+    if (values == null || values.isEmpty) return const <File>[];
+    final files = <File>[];
+    for (final value in values) {
+      final path = value?.toString() ?? '';
+      if (path.isEmpty) continue;
+      final file = File(path);
+      if (await file.exists()) files.add(file);
+    }
+    return files;
   }
 
   Future<void> sendFile(
@@ -1434,6 +1459,18 @@ class LocalShareService extends ChangeNotifier {
         path,
       ], mode: ProcessStartMode.detached);
     }
+  }
+
+  Future<void> shareFile(ChatMessage message) async {
+    if (!Platform.isAndroid || !message.isFile) return;
+    final path = message.localPath;
+    if (path == null || path.isEmpty) {
+      throw const FileSystemException('الملف غير متاح للمشاركة');
+    }
+    await _native.invokeMethod<void>('shareFile', {
+      'path': path,
+      'name': message.fileName ?? 'file',
+    });
   }
 
   Future<void> openLink(String rawUrl) async {

@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.webkit.MimeTypeMap
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -43,6 +44,21 @@ class MainActivity : FlutterActivity() {
                         result.success(saved)
                     } catch (e: Exception) {
                         result.error("SAVE_FAILED", e.message ?: "Unable to save file", null)
+                    }
+                }
+
+                "shareFile" -> {
+                    val path = call.argument<String>("path")
+                    val requestedName = call.argument<String>("name")
+                    if (path.isNullOrBlank()) {
+                        result.error("INVALID_PATH", "Missing file path", null)
+                        return@setMethodCallHandler
+                    }
+                    try {
+                        shareFile(path, requestedName)
+                        result.success(null)
+                    } catch (e: Exception) {
+                        result.error("SHARE_FAILED", e.message ?: "Unable to share file", null)
                     }
                 }
 
@@ -108,6 +124,58 @@ class MainActivity : FlutterActivity() {
             resolver.delete(uri, null, null)
             throw e
         }
+    }
+
+    private fun shareFile(raw: String, requestedName: String?) {
+        val shareUri: Uri
+        val mime: String
+        if (raw.startsWith("content://", ignoreCase = true)) {
+            shareUri = Uri.parse(raw)
+            mime = contentResolver.getType(shareUri) ?: "application/octet-stream"
+        } else {
+            val source = File(raw).canonicalFile
+            if (!source.exists() || !source.isFile) {
+                throw IllegalStateException("File does not exist")
+            }
+            val allowedRoots = listOfNotNull(
+                cacheDir,
+                externalCacheDir,
+                filesDir,
+                getExternalFilesDir(null),
+            ).map { it.canonicalFile }
+            var shareSource = source
+            val insideOwnedStorage = allowedRoots.any { root ->
+                source.path == root.path || source.path.startsWith(root.path + File.separator)
+            }
+            if (!insideOwnedStorage) {
+                val shareDir = File(cacheDir, "share-out").apply { mkdirs() }
+                shareDir.listFiles()?.filter { it.isFile && System.currentTimeMillis() - it.lastModified() > 86_400_000L }
+                    ?.forEach { it.delete() }
+                val target = File(
+                    shareDir,
+                    "${System.currentTimeMillis()}-${sanitizeFileName(requestedName ?: source.name)}",
+                )
+                source.inputStream().use { input ->
+                    target.outputStream().use { output -> input.copyTo(output, 1024 * 1024) }
+                }
+                shareSource = target
+            }
+            shareUri = FileProvider.getUriForFile(
+                this,
+                "$packageName.fileprovider",
+                shareSource,
+            )
+            val extension = shareSource.name.substringAfterLast('.', "").lowercase()
+            mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+                ?: "application/octet-stream"
+        }
+
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = mime
+            putExtra(Intent.EXTRA_STREAM, shareUri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(intent, "مشاركة الملف"))
     }
 
     private fun openUri(raw: String) {
