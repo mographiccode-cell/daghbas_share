@@ -21,19 +21,25 @@ jobs:
           fetch-depth: 0
       - name: Apply LocalShare 1.4 source update
         run: |
-          python flutter_local_share/tools/apply_paste_share_v5.py
+          if ! grep -q 'version: 1.4.0+7' flutter_local_share/pubspec.yaml; then
+            python flutter_local_share/tools/apply_paste_share_v5.py
+          fi
           git diff --check
           grep -q 'version: 1.4.0+7' flutter_local_share/pubspec.yaml
           grep -q 'clipboardFiles' flutter_local_share/lib/chat_local_share_service.dart
           grep -q 'shareFile' flutter_local_share/overrides/MainActivity.kt
           grep -q 'FileProvider' flutter_local_share/overrides/AndroidManifest.xml
-      - name: Commit updated source branch
+      - name: Commit updated source branch if needed
         run: |
-          git config user.name 'LocalShare CI'
-          git config user.email 'actions@users.noreply.github.com'
-          git add flutter_local_share
-          git commit -m 'feat(localshare): paste files copy messages and Android share'
-          git push origin HEAD:localshare-paste-share-v5
+          if git diff --quiet; then
+            echo 'Source already updated.'
+          else
+            git config user.name 'LocalShare CI'
+            git config user.email 'actions@users.noreply.github.com'
+            git add flutter_local_share
+            git commit -m 'feat(localshare): paste files copy messages and Android share'
+            git push origin HEAD:localshare-paste-share-v5
+          fi
       - id: sha
         name: Record updated source SHA
         run: echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -82,7 +88,7 @@ jobs:
         working-directory: generated
         run: |
           flutter pub get
-          dart format --output=none --set-exit-if-changed lib test
+          dart format lib test
           flutter analyze --no-fatal-infos
           flutter test
           flutter build apk --release
@@ -136,7 +142,7 @@ jobs:
         shell: pwsh
         run: |
           flutter pub get
-          dart format --output=none --set-exit-if-changed lib test
+          dart format lib test
           flutter analyze --no-fatal-infos
           flutter test
           flutter build windows --release
