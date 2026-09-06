@@ -41,7 +41,7 @@ class LocalShareRuntimeKeepAlive {
       );
       if (!initialized) return false;
       if (FlutterBackground.isBackgroundExecutionEnabled) return true;
-      return FlutterBackground.enableBackgroundExecution();
+      return await FlutterBackground.enableBackgroundExecution();
     } catch (_) {
       // LocalShare still works in foreground if Android rejects background mode.
       return false;
