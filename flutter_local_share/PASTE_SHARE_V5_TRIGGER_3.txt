@@ -1,0 +1,1 @@
+Validate LocalShare 1.4 after Android desugaring fix.
