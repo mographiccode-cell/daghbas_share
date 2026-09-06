@@ -1,0 +1,1 @@
+Build LocalShare 1.4 from validated background messaging, Android share sheet, rich clipboard paste, copy actions, and direct green links.
