@@ -71,6 +71,9 @@ jobs:
           cp flutter_local_share/overrides/MainActivity.kt generated/android/app/src/main/kotlin/com/mographiccode/local_share/MainActivity.kt
           mkdir -p generated/android/app/src/main/res/xml
           cp flutter_local_share/overrides/localshare_file_paths.xml generated/android/app/src/main/res/xml/localshare_file_paths.xml
+          python flutter_local_share/tools/patch_android_desugaring.py generated/android/app/build.gradle.kts
+          grep -q 'isCoreLibraryDesugaringEnabled = true' generated/android/app/build.gradle.kts
+          grep -q 'desugar_jdk_libs:2.1.5' generated/android/app/build.gradle.kts
       - name: Apply app icon
         run: |
           python -m pip install --quiet pillow
