@@ -1,0 +1,152 @@
+name: LocalShare Paste Copy Share V5
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.ref == 'localshare-paste-share-v5'
+    runs-on: ubuntu-latest
+    outputs:
+      source_sha: ${{ steps.sha.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: localshare-paste-share-v5
+          fetch-depth: 0
+      - name: Apply LocalShare 1.4 source update
+        run: |
+          python flutter_local_share/tools/apply_paste_share_v5.py
+          git diff --check
+          grep -q 'version: 1.4.0+7' flutter_local_share/pubspec.yaml
+          grep -q 'clipboardFiles' flutter_local_share/lib/chat_local_share_service.dart
+          grep -q 'shareFile' flutter_local_share/overrides/MainActivity.kt
+          grep -q 'FileProvider' flutter_local_share/overrides/AndroidManifest.xml
+      - name: Commit updated source branch
+        run: |
+          git config user.name 'LocalShare CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add flutter_local_share
+          git commit -m 'feat(localshare): paste files copy messages and Android share'
+          git push origin HEAD:localshare-paste-share-v5
+      - id: sha
+        name: Record updated source SHA
+        run: echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  android:
+    needs: apply
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: localshare-paste-share-v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android project
+        run: |
+          flutter create --org com.mographiccode --project-name local_share --platforms=android generated
+          rm -rf generated/lib generated/test
+          cp -R flutter_local_share/lib generated/lib
+          cp -R flutter_local_share/test generated/test
+          cp flutter_local_share/pubspec.yaml generated/pubspec.yaml
+          cp flutter_local_share/overrides/AndroidManifest.xml generated/android/app/src/main/AndroidManifest.xml
+          mkdir -p generated/android/app/src/main/kotlin/com/mographiccode/local_share
+          cp flutter_local_share/overrides/MainActivity.kt generated/android/app/src/main/kotlin/com/mographiccode/local_share/MainActivity.kt
+          mkdir -p generated/android/app/src/main/res/xml
+          cp flutter_local_share/overrides/localshare_file_paths.xml generated/android/app/src/main/res/xml/localshare_file_paths.xml
+      - name: Apply app icon
+        run: |
+          python -m pip install --quiet pillow
+          python flutter_local_share/tools/generate_localshare_icon.py localshare_icon.png
+          python - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          src=Image.open('localshare_icon.png').convert('RGBA')
+          for folder,size in [('mipmap-mdpi',48),('mipmap-hdpi',72),('mipmap-xhdpi',96),('mipmap-xxhdpi',144),('mipmap-xxxhdpi',192)]:
+              out=Path('generated/android/app/src/main/res')/folder/'ic_launcher.png'
+              out.parent.mkdir(parents=True,exist_ok=True)
+              src.resize((size,size),Image.Resampling.LANCZOS).save(out)
+          PY
+      - name: Analyze test and build APK
+        working-directory: generated
+        run: |
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze --no-fatal-infos
+          flutter test
+          flutter build apk --release
+          unzip -t build/app/outputs/flutter-apk/app-release.apk >/dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LocalShare-1.4-Android-Validation
+          path: generated/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+  windows:
+    needs: apply
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: localshare-paste-share-v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Windows project
+        shell: pwsh
+        run: |
+          flutter config --enable-windows-desktop
+          flutter create --org com.mographiccode --project-name local_share --platforms=windows generated
+          Remove-Item generated/lib -Recurse -Force
+          Remove-Item generated/test -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item flutter_local_share/lib generated/lib -Recurse
+          Copy-Item flutter_local_share/test generated/test -Recurse
+          Copy-Item flutter_local_share/pubspec.yaml generated/pubspec.yaml -Force
+          python flutter_local_share/tools/patch_windows_temp_cleanup.py generated/windows/runner/main.cpp
+          python flutter_local_share/tools/patch_windows_clipboard_files.py generated/windows/runner/flutter_window.cpp
+          Select-String -Path generated/windows/runner/flutter_window.cpp -Pattern 'CF_HDROP|getClipboardFiles' | Out-Null
+      - name: Apply app icon
+        shell: pwsh
+        run: |
+          python -m pip install --quiet pillow
+          python flutter_local_share/tools/generate_localshare_icon.py localshare_icon.png
+          @'
+          from PIL import Image
+          from pathlib import Path
+          src=Image.open('localshare_icon.png').convert('RGBA')
+          out=Path('generated/windows/runner/resources/app_icon.ico')
+          out.parent.mkdir(parents=True,exist_ok=True)
+          src.save(out,sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+          '@ | Set-Content icon_build.py -Encoding UTF8
+          python icon_build.py
+      - name: Analyze test and build Windows
+        working-directory: generated
+        shell: pwsh
+        run: |
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze --no-fatal-infos
+          flutter test
+          flutter build windows --release
+          if (-not (Test-Path 'build/windows/x64/runner/Release/local_share.exe')) { throw 'Windows EXE missing' }
+      - name: Package validation build
+        shell: pwsh
+        run: |
+          Compress-Archive -Path generated/build/windows/x64/runner/Release/* -DestinationPath LocalShare-1.4-Windows-Validation.zip -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LocalShare-1.4-Windows-Validation
+          path: LocalShare-1.4-Windows-Validation.zip
+          if-no-files-found: error
