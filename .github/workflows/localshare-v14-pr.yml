@@ -24,9 +24,10 @@ jobs:
         shell: bash
         run: |
           python flutter_local_share/tools/apply_v14_features.py
+          python flutter_local_share/tools/fix_v14_generated.py
           cd flutter_local_share
           flutter pub get
-          dart format --output=none --set-exit-if-changed lib test
+          dart format lib test
           flutter analyze --fatal-warnings --no-fatal-infos
           flutter test
 
@@ -45,6 +46,7 @@ jobs:
         shell: bash
         run: |
           python flutter_local_share/tools/apply_v14_features.py
+          python flutter_local_share/tools/fix_v14_generated.py
           rm -rf generated
           flutter create --org com.mographiccode --project-name local_share --platforms=android generated
           rm -rf generated/lib generated/test
@@ -78,6 +80,7 @@ jobs:
           PY
           cd generated
           flutter pub get
+          dart format lib test
           flutter analyze --fatal-warnings --no-fatal-infos
           flutter test
           flutter build apk --release
@@ -107,6 +110,7 @@ jobs:
         shell: pwsh
         run: |
           python flutter_local_share/tools/apply_v14_features.py
+          python flutter_local_share/tools/fix_v14_generated.py
           if (Test-Path generated) { Remove-Item generated -Recurse -Force }
           flutter create --org com.mographiccode --project-name local_share --platforms=windows generated
           Remove-Item generated/lib -Recurse -Force
@@ -119,13 +123,13 @@ jobs:
           python flutter_local_share/tools/generate_localshare_icon.py localshare_icon.png
           @'
           from PIL import Image
-          from pathlib import Path
           src=Image.open('localshare_icon.png').convert('RGBA')
           src.save('generated/windows/runner/resources/app_icon.ico',sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
           '@ | Set-Content icon_build.py -Encoding UTF8
           python icon_build.py
           Push-Location generated
           flutter pub get
+          dart format lib test
           flutter analyze --fatal-warnings --no-fatal-infos
           flutter test
           flutter build windows --release
