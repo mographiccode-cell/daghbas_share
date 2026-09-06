@@ -24,6 +24,7 @@ jobs:
         shell: bash
         run: |
           python flutter_local_share/tools/apply_background_share_v7.py
+          python flutter_local_share/tools/cleanup_background_share_v7.py
           cd flutter_local_share
           flutter pub get
           dart format lib test
