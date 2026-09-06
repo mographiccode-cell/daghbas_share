@@ -42,7 +42,7 @@ class LocalShareBackgroundRuntime with WindowListener, TrayListener {
     if (Platform.isAndroid) {
       FlutterForegroundTask.initCommunicationPort();
       FlutterForegroundTask.init(
-        androidNotificationOptions: const AndroidNotificationOptions(
+        androidNotificationOptions: AndroidNotificationOptions(
           channelId: 'localshare_background_connection',
           channelName: 'اتصال LocalShare في الخلفية',
           channelDescription: 'يبقي LocalShare متصلاً لاستقبال الرسائل والملفات.',
