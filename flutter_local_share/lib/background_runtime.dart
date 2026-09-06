@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
@@ -49,7 +48,7 @@ class LocalShareBackgroundRuntime with WindowListener, TrayListener {
           channelDescription: 'يبقي LocalShare متصلاً لاستقبال الرسائل والملفات.',
           onlyAlertOnce: true,
         ),
-        iosNotificationOptions: const IOSNotificationOptions(
+        iosNotificationOptions: IOSNotificationOptions(
           showNotification: false,
           playSound: false,
         ),
