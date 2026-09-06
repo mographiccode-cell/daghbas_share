@@ -4,12 +4,16 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'background_runtime.dart';
+import 'clipboard_paste.dart';
 import 'local_share_service.dart';
 import 'models.dart';
 import 'notifications.dart';
+import 'share_inbox.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await LocalSharePlatformRuntime.instance.prepareBeforeApp();
   await LocalShareNotifications.instance.initialize();
   runApp(const LocalShareApp());
 }
@@ -45,9 +49,17 @@ class LocalShareApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const Directionality(
+      home: Directionality(
         textDirection: TextDirection.rtl,
-        child: LocalShareShell(),
+        child: Platform.isAndroid
+            ? PopScope(
+                canPop: false,
+                onPopInvokedWithResult: (didPop, result) {
+                  if (!didPop) unawaited(_moveAndroidToBackground());
+                },
+                child: const LocalShareShell(),
+              )
+            : const LocalShareShell(),
       ),
     );
   }
@@ -64,21 +76,29 @@ class _LocalShareShellState extends State<LocalShareShell>
     with WidgetsBindingObserver {
   late final LocalShareService service;
   late final LocalShareNotifications notifications;
+  late final LocalSharePlatformRuntime runtime;
+  late final LocalShareShareInbox shareInbox;
   String? selectedPeerId;
   String? _pendingNotificationPeerId;
   AppLifecycleState _appLifecycle = AppLifecycleState.resumed;
+  final List<ExternalShareItem> _pendingExternalShares = <ExternalShareItem>[];
+  bool _sharePickerOpen = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     notifications = LocalShareNotifications.instance;
+    runtime = LocalSharePlatformRuntime.instance;
+    shareInbox = LocalShareShareInbox.instance;
     service = LocalShareService();
     service.onIncomingMessage = _handleIncomingMessage;
     notifications.attachPeerHandler(_openPeerFromNotification);
     service.init();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(notifications.requestPermission());
+      unawaited(runtime.activate());
+      unawaited(shareInbox.attach(_handleExternalShareItems));
     });
   }
 
@@ -111,8 +131,155 @@ class _LocalShareShellState extends State<LocalShareShell>
     WidgetsBinding.instance.removeObserver(this);
     service.onIncomingMessage = null;
     notifications.detachPeerHandler(_openPeerFromNotification);
+    shareInbox.detach(_handleExternalShareItems);
     service.dispose();
     super.dispose();
+  }
+
+  void _handleExternalShareItems(List<ExternalShareItem> items) {
+    if (items.isEmpty) return;
+    _pendingExternalShares.addAll(items.take(20));
+    _scheduleExternalSharePicker();
+  }
+
+  void _scheduleExternalSharePicker() {
+    if (!mounted ||
+        !service.initialized ||
+        _sharePickerOpen ||
+        _pendingExternalShares.isEmpty) {
+      return;
+    }
+    _sharePickerOpen = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_presentExternalSharePicker());
+    });
+  }
+
+  Future<void> _presentExternalSharePicker() async {
+    if (!mounted) {
+      _sharePickerOpen = false;
+      return;
+    }
+    final items = List<ExternalShareItem>.from(_pendingExternalShares);
+    final peers = service.pairedPeers;
+    if (peers.isEmpty) {
+      _pendingExternalShares.clear();
+      _sharePickerOpen = false;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('اربط جهازًا أولًا'),
+          content: const Text(
+            'وصلت مشاركة إلى LocalShare، لكن لا يوجد جهاز مرتبط لإرسالها إليه.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('حسنًا'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final peer = await showModalBottomSheet<Peer>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
+              child: Row(
+                children: [
+                  const Icon(Icons.share_rounded),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      items.length == 1
+                          ? 'إرسال العنصر إلى…'
+                          : 'إرسال ${items.length} عناصر إلى…',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            ...peers.map(
+              (candidate) => ListTile(
+                leading: CircleAvatar(
+                  child: Icon(
+                    Platform.isWindows
+                        ? Icons.phone_android_rounded
+                        : Icons.computer_rounded,
+                  ),
+                ),
+                title: Text(candidate.name),
+                subtitle: Text(
+                  service.isOnline(candidate.deviceId)
+                      ? 'متصل الآن'
+                      : 'غير متصل حاليًا',
+                ),
+                trailing: const Icon(Icons.send_rounded),
+                onTap: () => Navigator.pop(sheetContext, candidate),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+
+    _pendingExternalShares.clear();
+    _sharePickerOpen = false;
+    if (peer == null || !mounted) return;
+    setState(() => selectedPeerId = peer.deviceId);
+    await _sendExternalShareItems(peer, items);
+  }
+
+  Future<void> _sendExternalShareItems(
+    Peer peer,
+    List<ExternalShareItem> items,
+  ) async {
+    var failed = 0;
+    for (final item in items) {
+      try {
+        if (item.isText) {
+          final text = item.text!.trim();
+          for (var offset = 0; offset < text.length; offset += 4000) {
+            final end = (offset + 4000).clamp(0, text.length);
+            await service.sendChat(peer, text.substring(offset, end));
+          }
+        } else if (item.isUri) {
+          final file = await shareInbox.materialize(item);
+          try {
+            await service.sendFile(peer, file);
+          } finally {
+            try {
+              if (await file.exists()) await file.delete();
+            } catch (_) {}
+          }
+        }
+      } catch (_) {
+        failed++;
+      }
+    }
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    if (failed == 0) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('تمت إضافة المشاركة إلى المحادثة')),
+      );
+    } else {
+      messenger.showSnackBar(
+        SnackBar(content: Text('تعذر إرسال $failed من العناصر المشتركة')),
+      );
+    }
   }
 
   Peer? get selectedPeer {
@@ -160,6 +327,10 @@ class _LocalShareShellState extends State<LocalShareShell>
               ),
             ),
           );
+        }
+
+        if (_pendingExternalShares.isNotEmpty && !_sharePickerOpen) {
+          _scheduleExternalSharePicker();
         }
 
         final width = MediaQuery.sizeOf(context).width;
@@ -622,6 +793,8 @@ class _ChatPaneState extends State<_ChatPane> {
     super.initState();
     controller.addListener(_refreshComposer);
     scrollController.addListener(_handleScroll);
+    if (Platform.isWindows)
+      HardwareKeyboard.instance.addHandler(_handleKeyEvent);
   }
 
   @override
@@ -665,9 +838,49 @@ class _ChatPaneState extends State<_ChatPane> {
   void dispose() {
     controller.removeListener(_refreshComposer);
     scrollController.removeListener(_handleScroll);
+    if (Platform.isWindows)
+      HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     controller.dispose();
     scrollController.dispose();
     super.dispose();
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    if (!Platform.isWindows ||
+        event is! KeyDownEvent ||
+        event.logicalKey != LogicalKeyboardKey.keyV ||
+        !HardwareKeyboard.instance.isControlPressed) {
+      return false;
+    }
+    unawaited(_pasteClipboard());
+    return true;
+  }
+
+  Future<void> _pasteClipboard() async {
+    try {
+      final result = await pasteClipboardIntoChat(
+        service: widget.service,
+        peer: widget.peer,
+        controller: controller,
+      );
+      if (!mounted || !result.handled) return;
+      if (result.filesSent > 0) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _jumpToLatest(animated: true),
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result.filesSent == 1
+                  ? 'تم إرسال الملف من الحافظة'
+                  : 'تم إرسال ${result.filesSent} ملفات من الحافظة',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) _showError(context, e);
+    }
   }
 
   Future<void> _sendText() async {
@@ -1043,6 +1256,8 @@ class _ChatBubble extends StatelessWidget {
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
         onLongPress: () => _showMessageActions(context, service, peer, message),
+        onSecondaryTap: () =>
+            _showMessageActions(context, service, peer, message),
         child: Container(
           constraints: BoxConstraints(
             maxWidth: MediaQuery.sizeOf(context).width < 600 ? 320 : 520,
@@ -1094,65 +1309,52 @@ class _TextMessageContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SelectableText(
-          message.text,
-          textDirection: direction,
-          style: TextStyle(color: foreground, height: 1.38, fontSize: 14.5),
-        ),
-        if (isLink) ...[
-          const SizedBox(height: 8),
+        if (isLink)
           InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () => _confirmAndOpenLink(context, service, message.text),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0x0D1769E0),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0x221769E0)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.link_rounded,
-                    size: 19,
-                    color: Color(0xFF1769E0),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _linkHost(message.text),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textDirection: TextDirection.ltr,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12.5,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'فتح الرابط',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: foreground.withValues(alpha: 0.62),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.open_in_new_rounded, size: 17),
-                ],
+            borderRadius: BorderRadius.circular(6),
+            onTap: () => _openLinkDirect(context, service, message.text),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text(
+                message.text,
+                textDirection: TextDirection.ltr,
+                style: const TextStyle(
+                  color: Color(0xFF168C4B),
+                  height: 1.38,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                  decoration: TextDecoration.underline,
+                  decorationColor: Color(0xFF168C4B),
+                ),
               ),
             ),
+          )
+        else
+          SelectableText(
+            message.text,
+            textDirection: direction,
+            style: TextStyle(color: foreground, height: 1.38, fontSize: 14.5),
           ),
-        ],
         const SizedBox(height: 4),
-        _MessageMeta(message: message, foreground: foreground),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _MessageMeta(message: message, foreground: foreground),
+            const SizedBox(width: 3),
+            InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _copyMessage(context, message),
+              child: const Padding(
+                padding: EdgeInsets.all(3),
+                child: Icon(
+                  Icons.copy_rounded,
+                  size: 13,
+                  color: Color(0xFF667085),
+                ),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -1825,48 +2027,43 @@ IconData _fileIcon(String? name) {
   return Icons.insert_drive_file_outlined;
 }
 
-Future<void> _confirmAndOpenLink(
+Future<void> _copyMessage(BuildContext context, ChatMessage message) async {
+  final value = message.isFile ? (message.fileName ?? 'ملف') : message.text;
+  await Clipboard.setData(ClipboardData(text: value));
+  if (context.mounted) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('تم النسخ')));
+  }
+}
+
+Future<void> _openLinkDirect(
   BuildContext context,
   LocalShareService service,
   String url,
 ) async {
-  final host = _linkHost(url);
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('فتح رابط خارجي؟'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('سيتم فتح الرابط في المتصفح الافتراضي.'),
-          const SizedBox(height: 10),
-          SelectableText(
-            host,
-            textDirection: TextDirection.ltr,
-            style: const TextStyle(fontWeight: FontWeight.w800),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('إلغاء'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text('فتح'),
-        ),
-      ],
-    ),
-  );
-  if (ok == true) {
-    try {
-      await service.openLink(url);
-    } catch (e) {
-      if (context.mounted) _showError(context, e);
-    }
+  final uri = Uri.tryParse(url.trim());
+  if (uri == null ||
+      uri.host.isEmpty ||
+      (uri.scheme.toLowerCase() != 'http' &&
+          uri.scheme.toLowerCase() != 'https')) {
+    if (context.mounted) _showError(context, 'الرابط غير صالح');
+    return;
   }
+  try {
+    await service.openLink(uri.toString());
+  } catch (e) {
+    if (context.mounted) _showError(context, e);
+  }
+}
+
+Future<void> _moveAndroidToBackground() async {
+  if (!Platform.isAndroid) return;
+  try {
+    await const MethodChannel(
+      'local_share/native',
+    ).invokeMethod<void>('moveToBackground');
+  } catch (_) {}
 }
 
 Future<void> _showMessageActions(
@@ -1881,12 +2078,11 @@ Future<void> _showMessageActions(
     builder: (context) => SafeArea(
       child: Wrap(
         children: [
-          if (!message.isFile)
-            ListTile(
-              leading: const Icon(Icons.copy_rounded),
-              title: const Text('نسخ'),
-              onTap: () => Navigator.pop(context, 'copy'),
-            ),
+          ListTile(
+            leading: const Icon(Icons.copy_rounded),
+            title: Text(message.isFile ? 'نسخ اسم الملف' : 'نسخ'),
+            onTap: () => Navigator.pop(context, 'copy'),
+          ),
           if (message.kind == ChatMessageKind.link)
             ListTile(
               leading: const Icon(Icons.open_in_new_rounded),
@@ -1905,14 +2101,9 @@ Future<void> _showMessageActions(
   );
   if (!context.mounted || action == null) return;
   if (action == 'copy') {
-    await Clipboard.setData(ClipboardData(text: message.text));
-    if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('تم النسخ')));
-    }
+    await _copyMessage(context, message);
   } else if (action == 'open') {
-    await _confirmAndOpenLink(context, service, message.text);
+    await _openLinkDirect(context, service, message.text);
   } else if (action == 'retry') {
     try {
       await service.retryMessage(peer, message);

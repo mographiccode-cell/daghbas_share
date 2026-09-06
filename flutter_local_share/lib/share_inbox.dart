@@ -3,12 +3,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 
 class ExternalShareItem {
-  const ExternalShareItem({
-    required this.kind,
-    this.text,
-    this.uri,
-    this.name,
-  });
+  const ExternalShareItem({required this.kind, this.text, this.uri, this.name});
 
   final String kind;
   final String? text;
@@ -66,7 +61,9 @@ class LocalShareShareInbox {
     if (!Platform.isAndroid || _consuming) return;
     _consuming = true;
     try {
-      final raw = await _channel.invokeMethod<List<dynamic>>('consumeSharedItems');
+      final raw = await _channel.invokeMethod<List<dynamic>>(
+        'consumeSharedItems',
+      );
       if (raw == null || raw.isEmpty) return;
       final items = raw
           .map(ExternalShareItem.fromDynamic)

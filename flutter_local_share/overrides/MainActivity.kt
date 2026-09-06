@@ -67,6 +67,11 @@ class MainActivity : FlutterActivity() {
                         }
                     }
 
+                    "moveToBackground" -> {
+                        moveTaskToBack(true)
+                        result.success(null)
+                    }
+
                     "consumeSharedItems" -> {
                         val copy = synchronized(pendingSharedItems) {
                             val value = pendingSharedItems.toList()

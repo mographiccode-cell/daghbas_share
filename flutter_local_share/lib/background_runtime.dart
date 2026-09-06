@@ -9,7 +9,8 @@ import 'package:window_manager/window_manager.dart';
 class LocalSharePlatformRuntime with TrayListener, WindowListener {
   LocalSharePlatformRuntime._();
 
-  static final LocalSharePlatformRuntime instance = LocalSharePlatformRuntime._();
+  static final LocalSharePlatformRuntime instance =
+      LocalSharePlatformRuntime._();
 
   bool _desktopPrepared = false;
   bool _desktopActivated = false;
