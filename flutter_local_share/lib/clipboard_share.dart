@@ -20,8 +20,7 @@ class LocalShareClipboard {
 
     for (final item in reader.items) {
       if (item.canProvide(Formats.fileUri)) {
-        final named = await item.readValue(Formats.fileUri);
-        final uri = named?.uri;
+        final uri = await item.readValue(Formats.fileUri);
         if (uri != null && uri.scheme == 'file') {
           final file = File.fromUri(uri);
           if (await file.exists()) files.add(file);
