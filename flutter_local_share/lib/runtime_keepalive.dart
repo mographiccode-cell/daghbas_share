@@ -1,11 +1,15 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_background/flutter_background.dart';
+import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
 class LocalShareRuntimeKeepAlive {
   LocalShareRuntimeKeepAlive._();
+
+  static const MethodChannel _nativeChannel = MethodChannel(
+    'local_share/native',
+  );
 
   static Future<void> initializeBeforeRunApp() async {
     if (Platform.isWindows) {
@@ -27,20 +31,10 @@ class LocalShareRuntimeKeepAlive {
   static Future<bool> enableAndroidBackgroundAfterLaunch() async {
     if (!Platform.isAndroid) return false;
     try {
-      const config = FlutterBackgroundAndroidConfig(
-        notificationTitle: 'LocalShare متصل',
-        notificationText: 'جاهز لاستقبال الرسائل والملفات عبر الشبكة المحلية',
-        notificationImportance: AndroidNotificationImportance.normal,
-        enableWifiLock: true,
-      );
-      final initialized = await FlutterBackground.initialize(
-        androidConfig: config,
-      );
-      if (!initialized) return false;
-      if (FlutterBackground.isBackgroundExecutionEnabled) return true;
-      return await FlutterBackground.enableBackgroundExecution();
+      return await _nativeChannel.invokeMethod<bool>('startKeepAliveService') ??
+          false;
     } catch (_) {
-      // Background mode is optional; app startup and foreground messaging must never fail.
+      // Background keepalive is best-effort. Foreground use must remain available.
       return false;
     }
   }
