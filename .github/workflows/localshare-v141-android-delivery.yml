@@ -62,7 +62,7 @@ jobs:
       - name: Emulator launch and background smoke test
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 36
           arch: x86_64
           profile: pixel_6
           disable-animations: true
@@ -92,6 +92,7 @@ jobs:
             'LocalShare 1.4.1+8' \
             'Package: com.mographiccode.local_share' \
             'Android minSdk: 29' \
+            'Validated on Android 16 / API 36 emulator' \
             'Build: flutter pub get && flutter test && flutter build apk --release' \
             > source-package/LOCALSHARE_BUILD_INFO.txt
           zip -qr LocalShare-1.4.1-Android-Source.zip source-package
