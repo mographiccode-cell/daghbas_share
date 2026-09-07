@@ -1,0 +1,53 @@
+name: LocalShare 1.4.1 Android Delivery
+
+on:
+  push:
+    branches: [localshare-1.4.1-delivery]
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate and build APK
+        shell: bash
+        run: |
+          rm -rf generated
+          flutter create --org com.mographiccode --project-name local_share --platforms=android generated
+          rm -rf generated/lib generated/test
+          cp -r flutter_local_share/lib generated/lib
+          cp -r flutter_local_share/test generated/test
+          cp flutter_local_share/pubspec.yaml generated/pubspec.yaml
+          cp flutter_local_share/overrides/AndroidManifest.xml generated/android/app/src/main/AndroidManifest.xml
+          mkdir -p generated/android/app/src/main/kotlin/com/mographiccode/local_share
+          cp flutter_local_share/overrides/MainActivity.kt generated/android/app/src/main/kotlin/com/mographiccode/local_share/MainActivity.kt
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('generated/android/app/build.gradle.kts')
+          s=p.read_text()
+          s=s.replace('minSdk = flutter.minSdkVersion', 'minSdk = 29')
+          if 'isCoreLibraryDesugaringEnabled = true' not in s:
+              s=s.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")' not in s:
+              s += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")\n}\n'
+          p.write_text(s)
+          PY
+          cd generated
+          flutter pub get
+          flutter analyze --fatal-warnings --no-fatal-infos
+          flutter test
+          flutter build apk --release
+          unzip -t build/app/outputs/flutter-apk/app-release.apk >/dev/null
+          cd ..
+          cp generated/build/app/outputs/flutter-apk/app-release.apk LocalShare-1.4.1-Android.apk
+          sha256sum LocalShare-1.4.1-Android.apk > LocalShare-1.4.1-Android.apk.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LocalShare-1.4.1-Android-Delivery
+          path: |
+            LocalShare-1.4.1-Android.apk
+            LocalShare-1.4.1-Android.apk.sha256
