@@ -29,10 +29,7 @@ Future<ClipboardPastePayload> readClipboardForChat() async {
 
   final files = await _readWindowsFileDropList();
   if (files.isNotEmpty) {
-    return ClipboardPastePayload(
-      files: files,
-      temporaryFiles: const <File>[],
-    );
+    return ClipboardPastePayload(files: files, temporaryFiles: const <File>[]);
   }
 
   final image = await _readWindowsClipboardImage();
@@ -53,17 +50,13 @@ Future<ClipboardPastePayload> readClipboardForChat() async {
 
 Future<List<File>> _readWindowsFileDropList() async {
   try {
-    final result = await Process.run(
-      'powershell.exe',
-      <String>[
-        '-NoProfile',
-        '-NonInteractive',
-        '-STA',
-        '-Command',
-        r'''$ErrorActionPreference='SilentlyContinue'; $items=Get-Clipboard -Format FileDropList; if($null -ne $items){$items | ForEach-Object { $_.FullName }}''',
-      ],
-      runInShell: false,
-    ).timeout(const Duration(seconds: 5));
+    final result = await Process.run('powershell.exe', <String>[
+      '-NoProfile',
+      '-NonInteractive',
+      '-STA',
+      '-Command',
+      r'''$ErrorActionPreference='SilentlyContinue'; $items=Get-Clipboard -Format FileDropList; if($null -ne $items){$items | ForEach-Object { $_.FullName }}''',
+    ], runInShell: false).timeout(const Duration(seconds: 5));
     if (result.exitCode != 0) return const <File>[];
     final paths = '${result.stdout}'
         .split(RegExp(r'[\r\n]+'))
@@ -92,7 +85,8 @@ Future<File?> _readWindowsClipboardImage() async {
       '${folder.path}${Platform.pathSeparator}clipboard_${DateTime.now().microsecondsSinceEpoch}.png',
     );
     final escaped = output.path.replaceAll("'", "''");
-    final script = '''
+    final script =
+        '''
 \$ErrorActionPreference='SilentlyContinue'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -103,12 +97,16 @@ if(\$null -ne \$img){
   Write-Output 'OK'
 }
 ''';
-    final result = await Process.run(
-      'powershell.exe',
-      <String>['-NoProfile', '-NonInteractive', '-STA', '-Command', script],
-      runInShell: false,
-    ).timeout(const Duration(seconds: 8));
-    if (result.exitCode == 0 && await output.exists() && await output.length() > 0) {
+    final result = await Process.run('powershell.exe', <String>[
+      '-NoProfile',
+      '-NonInteractive',
+      '-STA',
+      '-Command',
+      script,
+    ], runInShell: false).timeout(const Duration(seconds: 8));
+    if (result.exitCode == 0 &&
+        await output.exists() &&
+        await output.length() > 0) {
       return output;
     }
     if (await output.exists()) {
