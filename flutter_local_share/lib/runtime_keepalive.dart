@@ -8,10 +8,6 @@ class LocalShareRuntimeKeepAlive {
   LocalShareRuntimeKeepAlive._();
 
   static Future<void> initializeBeforeRunApp() async {
-    if (Platform.isAndroid) {
-      await _enableAndroidBackgroundExecution();
-    }
-
     if (Platform.isWindows) {
       await windowManager.ensureInitialized();
       const options = WindowOptions(
@@ -20,7 +16,7 @@ class LocalShareRuntimeKeepAlive {
         skipTaskbar: false,
         title: 'LocalShare',
       );
-      windowManager.waitUntilReadyToShow(options, () async {
+      await windowManager.waitUntilReadyToShow(options, () async {
         await windowManager.setPreventClose(true);
         await windowManager.show();
         await windowManager.focus();
@@ -28,7 +24,8 @@ class LocalShareRuntimeKeepAlive {
     }
   }
 
-  static Future<bool> _enableAndroidBackgroundExecution() async {
+  static Future<bool> enableAndroidBackgroundAfterLaunch() async {
+    if (!Platform.isAndroid) return false;
     try {
       const config = FlutterBackgroundAndroidConfig(
         notificationTitle: 'LocalShare متصل',
@@ -43,7 +40,7 @@ class LocalShareRuntimeKeepAlive {
       if (FlutterBackground.isBackgroundExecutionEnabled) return true;
       return await FlutterBackground.enableBackgroundExecution();
     } catch (_) {
-      // LocalShare still works in foreground if Android rejects background mode.
+      // Background mode is optional; app startup and foreground messaging must never fail.
       return false;
     }
   }
