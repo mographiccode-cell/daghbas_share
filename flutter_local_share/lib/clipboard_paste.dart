@@ -1,10 +1,7 @@
-import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:super_clipboard/super_clipboard.dart';
-
-import 'models.dart';
 
 class ClipboardPastePayload {
   const ClipboardPastePayload({
@@ -21,91 +18,104 @@ class ClipboardPastePayload {
 }
 
 Future<ClipboardPastePayload> readClipboardForChat() async {
-  final clipboard = SystemClipboard.instance;
-  if (clipboard == null) {
-    return const ClipboardPastePayload(files: [], temporaryFiles: []);
+  if (!Platform.isWindows) {
+    final data = await Clipboard.getData('text/plain');
+    return ClipboardPastePayload(
+      files: const <File>[],
+      temporaryFiles: const <File>[],
+      text: data?.text,
+    );
   }
 
-  final reader = await clipboard.read();
-  final files = <File>[];
-  final temporaryFiles = <File>[];
-  var imageIndex = 0;
-
-  for (final item in reader.items) {
-    if (item.canProvide(Formats.fileUri)) {
-      try {
-        final uri = await item.readValue(Formats.fileUri);
-        if (uri != null && uri.scheme.toLowerCase() == 'file') {
-          final file = File.fromUri(uri);
-          if (await file.exists()) {
-            files.add(file);
-            continue;
-          }
-        }
-      } catch (_) {}
-    }
-
-    if (item.canProvide(Formats.png)) {
-      final completer = Completer<File?>();
-      try {
-        final suggested = await item.getSuggestedName();
-        final progress = item.getFile(
-          Formats.png,
-          (readerFile) async {
-            try {
-              final root = await getTemporaryDirectory();
-              final folder = Directory(
-                '${root.path}${Platform.pathSeparator}LocalShare${Platform.pathSeparator}clipboard',
-              );
-              await folder.create(recursive: true);
-              imageIndex++;
-              var name = safeFileName(
-                suggested ??
-                    readerFile.fileName ??
-                    'clipboard_${DateTime.now().millisecondsSinceEpoch}_$imageIndex.png',
-              );
-              if (!name.toLowerCase().endsWith('.png')) {
-                name = '$name.png';
-              }
-              final output = File(
-                '${folder.path}${Platform.pathSeparator}${DateTime.now().microsecondsSinceEpoch}_$name',
-              );
-              final sink = output.openWrite();
-              await sink.addStream(readerFile.getStream());
-              await sink.close();
-              if (!completer.isCompleted) completer.complete(output);
-            } catch (_) {
-              if (!completer.isCompleted) completer.complete(null);
-            }
-          },
-          onError: (_) {
-            if (!completer.isCompleted) completer.complete(null);
-          },
-        );
-        if (progress != null) {
-          final file = await completer.future.timeout(
-            const Duration(seconds: 20),
-            onTimeout: () => null,
-          );
-          if (file != null && await file.exists()) {
-            files.add(file);
-            temporaryFiles.add(file);
-          }
-        }
-      } catch (_) {}
-    }
+  final files = await _readWindowsFileDropList();
+  if (files.isNotEmpty) {
+    return ClipboardPastePayload(
+      files: files,
+      temporaryFiles: const <File>[],
+    );
   }
 
-  String? text;
-  if (files.isEmpty && reader.canProvide(Formats.plainText)) {
-    try {
-      text = await reader.readValue(Formats.plainText);
-    } catch (_) {}
+  final image = await _readWindowsClipboardImage();
+  if (image != null) {
+    return ClipboardPastePayload(
+      files: <File>[image],
+      temporaryFiles: <File>[image],
+    );
   }
 
+  final data = await Clipboard.getData('text/plain');
   return ClipboardPastePayload(
-    files: files,
-    temporaryFiles: temporaryFiles,
-    text: text,
+    files: const <File>[],
+    temporaryFiles: const <File>[],
+    text: data?.text,
   );
+}
+
+Future<List<File>> _readWindowsFileDropList() async {
+  try {
+    final result = await Process.run(
+      'powershell.exe',
+      <String>[
+        '-NoProfile',
+        '-NonInteractive',
+        '-STA',
+        '-Command',
+        r'''$ErrorActionPreference='SilentlyContinue'; $items=Get-Clipboard -Format FileDropList; if($null -ne $items){$items | ForEach-Object { $_.FullName }}''',
+      ],
+      runInShell: false,
+    ).timeout(const Duration(seconds: 5));
+    if (result.exitCode != 0) return const <File>[];
+    final paths = '${result.stdout}'
+        .split(RegExp(r'[\r\n]+'))
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .take(100);
+    final output = <File>[];
+    for (final path in paths) {
+      final file = File(path);
+      if (await file.exists()) output.add(file);
+    }
+    return output;
+  } catch (_) {
+    return const <File>[];
+  }
+}
+
+Future<File?> _readWindowsClipboardImage() async {
+  try {
+    final root = await getTemporaryDirectory();
+    final folder = Directory(
+      '${root.path}${Platform.pathSeparator}LocalShare${Platform.pathSeparator}clipboard',
+    );
+    await folder.create(recursive: true);
+    final output = File(
+      '${folder.path}${Platform.pathSeparator}clipboard_${DateTime.now().microsecondsSinceEpoch}.png',
+    );
+    final escaped = output.path.replaceAll("'", "''");
+    final script = '''
+\$ErrorActionPreference='SilentlyContinue'
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+\$img=[System.Windows.Forms.Clipboard]::GetImage()
+if(\$null -ne \$img){
+  \$img.Save('$escaped',[System.Drawing.Imaging.ImageFormat]::Png)
+  \$img.Dispose()
+  Write-Output 'OK'
+}
+''';
+    final result = await Process.run(
+      'powershell.exe',
+      <String>['-NoProfile', '-NonInteractive', '-STA', '-Command', script],
+      runInShell: false,
+    ).timeout(const Duration(seconds: 8));
+    if (result.exitCode == 0 && await output.exists() && await output.length() > 0) {
+      return output;
+    }
+    if (await output.exists()) {
+      try {
+        await output.delete();
+      } catch (_) {}
+    }
+  } catch (_) {}
+  return null;
 }
