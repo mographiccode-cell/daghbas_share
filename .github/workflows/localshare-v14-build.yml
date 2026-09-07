@@ -1,4 +1,4 @@
-name: LocalShare 1.4 Background Messaging
+name: LocalShare 1.4.1 Hotfix Build
 
 on:
   push:
@@ -20,12 +20,10 @@ jobs:
         with:
           channel: stable
           cache: true
-      - name: Apply LocalShare 1.4 source changes
+      - name: Apply and validate LocalShare 1.4.1 hotfix
         shell: bash
         run: |
-          if ! grep -q "Future<void> shareFile(ChatMessage message)" flutter_local_share/lib/chat_local_share_service.dart; then
-            python flutter_local_share/tools/apply_localshare_v14.py
-          fi
+          python flutter_local_share/tools/apply_localshare_v141_hotfix.py
           cd flutter_local_share
           flutter pub get
           dart format lib test
@@ -38,7 +36,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add flutter_local_share/lib flutter_local_share/pubspec.lock
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m "feat(localshare): background messaging, share sheet and rich paste"
+          git commit -m "fix(localshare): stabilize 1.4.1 Android startup and LAN discovery"
           git push origin HEAD:localshare-1.4-background-share
 
   android:
@@ -96,11 +94,12 @@ jobs:
           flutter build apk --release
           unzip -t build/app/outputs/flutter-apk/app-release.apk >/dev/null
           cd ..
-          cp generated/build/app/outputs/flutter-apk/app-release.apk LocalShare-1.4-Android.apk
-          sha256sum LocalShare-1.4-Android.apk > LocalShare-1.4-Android.apk.sha256
+          cp generated/build/app/outputs/flutter-apk/app-release.apk LocalShare-1.4.1-Android.apk
+          sha256sum LocalShare-1.4.1-Android.apk > LocalShare-1.4.1-Android.apk.sha256
           grep -q 'FOREGROUND_SERVICE_CONNECTED_DEVICE' flutter_local_share/overrides/AndroidManifest.xml
           grep -q 'android.intent.action.SEND_MULTIPLE' flutter_local_share/overrides/AndroidManifest.xml
-      - name: Emulator background smoke test
+          grep -q 'NEARBY_WIFI_DEVICES' flutter_local_share/overrides/AndroidManifest.xml
+      - name: Emulator launch and background smoke test
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -108,22 +107,22 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            adb install -r LocalShare-1.4-Android.apk
+            adb install -r LocalShare-1.4.1-Android.apk
             adb shell pm grant com.mographiccode.local_share android.permission.POST_NOTIFICATIONS || true
-            adb shell dumpsys deviceidle whitelist +com.mographiccode.local_share || true
-            adb shell am start -n com.mographiccode.local_share/.MainActivity
+            adb shell am start -W -n com.mographiccode.local_share/.MainActivity
             sleep 10
+            adb shell pidof com.mographiccode.local_share
             adb shell input keyevent KEYCODE_HOME
-            sleep 5
+            sleep 6
             adb shell pidof com.mographiccode.local_share
             adb shell dumpsys activity services com.mographiccode.local_share | grep -q IsolateHolderService
             adb shell am force-stop com.mographiccode.local_share
       - uses: actions/upload-artifact@v4
         with:
-          name: LocalShare-1.4-Android
+          name: LocalShare-1.4.1-Android
           path: |
-            LocalShare-1.4-Android.apk
-            LocalShare-1.4-Android.apk.sha256
+            LocalShare-1.4.1-Android.apk
+            LocalShare-1.4.1-Android.apk.sha256
 
   windows:
     needs: prepare
@@ -189,12 +188,12 @@ jobs:
           [Setup]
           AppId={{8D2D488C-246B-4BDC-8C24-7B10A65B9649}
           AppName=LocalShare
-          AppVersion=1.4.0
+          AppVersion=1.4.1
           AppPublisher=MographicCode LocalShare
           DefaultDirName={autopf}\LocalShare
           DefaultGroupName=LocalShare
           OutputDir=$($PWD.Path)\artifacts
-          OutputBaseFilename=LocalShare-1.4-Windows-Setup
+          OutputBaseFilename=LocalShare-1.4.1-Windows-Setup
           SetupIconFile=$icon
           Compression=lzma2
           SolidCompression=yes
@@ -218,10 +217,10 @@ jobs:
           Set-Content installer.iss $iss -Encoding UTF8
           & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' installer.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Get-FileHash artifacts/LocalShare-1.4-Windows-Setup.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  LocalShare-1.4-Windows-Setup.exe" } | Set-Content artifacts/LocalShare-1.4-Windows-Setup.exe.sha256
+          Get-FileHash artifacts/LocalShare-1.4.1-Windows-Setup.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  LocalShare-1.4.1-Windows-Setup.exe" } | Set-Content artifacts/LocalShare-1.4.1-Windows-Setup.exe.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: LocalShare-1.4-Windows
+          name: LocalShare-1.4.1-Windows
           path: |
-            artifacts/LocalShare-1.4-Windows-Setup.exe
-            artifacts/LocalShare-1.4-Windows-Setup.exe.sha256
+            artifacts/LocalShare-1.4.1-Windows-Setup.exe
+            artifacts/LocalShare-1.4.1-Windows-Setup.exe.sha256
