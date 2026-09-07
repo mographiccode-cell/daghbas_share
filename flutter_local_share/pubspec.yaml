@@ -1,7 +1,7 @@
 name: local_share
 description: Secure local-network chat and file sharing between Android and Windows.
 publish_to: 'none'
-version: 1.4.2+9
+version: 1.4.3+10
 
 environment:
   sdk: '>=3.10.0 <4.0.0'
