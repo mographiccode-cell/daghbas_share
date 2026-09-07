@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -17,44 +18,72 @@ class LocalShareNotifications {
   ValueChanged<String>? onPeerRequested;
   String? _pendingPeerId;
   bool _initialized = false;
+  bool _initializationStarted = false;
+  Future<void>? _initializationFuture;
 
+  /// Starts notification setup without blocking the first Flutter frame.
+  ///
+  /// Android vendor ROMs occasionally delay or fail notification plugin setup.
+  /// LocalShare must still render and remain fully usable when that happens.
   Future<void> initialize() async {
-    if (_initialized || (!Platform.isAndroid && !Platform.isWindows)) return;
+    if (_initialized || _initializationStarted) return;
+    if (!Platform.isAndroid && !Platform.isWindows) return;
 
-    const android = AndroidInitializationSettings('ic_launcher');
-    const windows = WindowsInitializationSettings(
-      appName: 'LocalShare',
-      appUserModelId: 'MographicCode.LocalShare.Desktop.1',
-      guid: 'b0f62d71-ea29-4fd0-8f32-1769e0f40404',
-    );
+    _initializationStarted = true;
+    final future = _initializeSafely();
+    _initializationFuture = future;
+    unawaited(future);
+  }
 
-    await _plugin.initialize(
-      settings: InitializationSettings(
-        android: Platform.isAndroid ? android : null,
-        windows: Platform.isWindows ? windows : null,
-      ),
-      onDidReceiveNotificationResponse: (response) {
-        _handlePayload(response.payload);
-      },
-    );
+  Future<void> _initializeSafely() async {
+    try {
+      const android = AndroidInitializationSettings('ic_launcher');
+      const windows = WindowsInitializationSettings(
+        appName: 'LocalShare',
+        appUserModelId: 'MographicCode.LocalShare.Desktop.1',
+        guid: 'b0f62d71-ea29-4fd0-8f32-1769e0f40404',
+      );
 
-    if (Platform.isAndroid) {
-      try {
-        final launch = await _plugin.getNotificationAppLaunchDetails();
-        if (launch?.didNotificationLaunchApp == true) {
-          _handlePayload(launch?.notificationResponse?.payload);
+      await _plugin
+          .initialize(
+            settings: InitializationSettings(
+              android: Platform.isAndroid ? android : null,
+              windows: Platform.isWindows ? windows : null,
+            ),
+            onDidReceiveNotificationResponse: (response) {
+              _handlePayload(response.payload);
+            },
+          )
+          .timeout(const Duration(seconds: 4));
+
+      if (Platform.isAndroid) {
+        try {
+          final launch = await _plugin
+              .getNotificationAppLaunchDetails()
+              .timeout(const Duration(seconds: 2));
+          if (launch?.didNotificationLaunchApp == true) {
+            _handlePayload(launch?.notificationResponse?.payload);
+          }
+        } catch (_) {
+          // Launch details are optional; notifications still work without them.
         }
-      } catch (_) {
-        // Launch details are optional; notifications still work without them.
       }
-    }
 
-    _initialized = true;
+      _initialized = true;
+    } catch (_) {
+      // Notification setup is optional. Never leave the app on the native splash
+      // screen because a vendor notification implementation misbehaved.
+      _initialized = false;
+    }
   }
 
   Future<void> requestPermission() async {
     if (!Platform.isAndroid) return;
     try {
+      final pending = _initializationFuture;
+      if (pending != null) {
+        await pending.timeout(const Duration(seconds: 4), onTimeout: () {});
+      }
       final android = _plugin
           .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin
