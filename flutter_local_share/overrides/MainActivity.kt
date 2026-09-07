@@ -1,5 +1,10 @@
 package com.mographiccode.local_share
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -8,7 +13,9 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Environment
 import android.os.Handler
+import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
@@ -95,6 +102,16 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("MULTICAST_LOCK_FAILED", e.message ?: "Unable to enable LAN discovery", null)
+                    }
+                }
+
+                "startKeepAliveService" -> {
+                    try {
+                        val keepAliveIntent = Intent(this, LocalShareForegroundService::class.java)
+                        startForegroundService(keepAliveIntent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("KEEPALIVE_FAILED", e.message ?: "Unable to start LocalShare background service", null)
                     }
                 }
 
@@ -318,5 +335,116 @@ class MainActivity : FlutterActivity() {
             clipData = android.content.ClipData.newRawUri("LocalShare", uri)
         }
         startActivity(Intent.createChooser(sendIntent, "مشاركة عبر").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+}
+
+class LocalShareForegroundService : Service() {
+    companion object {
+        private const val CHANNEL_ID = "localshare_background"
+        private const val NOTIFICATION_ID = 40404
+    }
+
+    private var wifiLock: WifiManager.WifiLock? = null
+    private var multicastLock: WifiManager.MulticastLock? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannel()
+        acquireRuntimeLocks()
+        startForeground(NOTIFICATION_ID, buildNotification())
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        acquireRuntimeLocks()
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        releaseRuntimeLocks()
+        super.onDestroy()
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun createNotificationChannel() {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "LocalShare background connection",
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = "Keeps LocalShare available for local-network discovery and transfers"
+            setShowBadge(false)
+        }
+        manager.createNotificationChannel(channel)
+    }
+
+    private fun buildNotification(): Notification {
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+            ?: Intent(this, MainActivity::class.java)
+        val contentIntent = PendingIntent.getActivity(
+            this,
+            0,
+            launchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        return Notification.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_upload_done)
+            .setContentTitle("LocalShare متصل")
+            .setContentText("جاهز لاستقبال الرسائل والملفات عبر الشبكة المحلية")
+            .setContentIntent(contentIntent)
+            .setOngoing(true)
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .build()
+    }
+
+    private fun acquireRuntimeLocks() {
+        try {
+            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            if (wifiLock?.isHeld != true) {
+                wifiLock = wifiManager.createWifiLock(
+                    WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+                    "LocalShareKeepAlive",
+                ).apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }
+            }
+            if (multicastLock?.isHeld != true) {
+                multicastLock = wifiManager.createMulticastLock("LocalShareBackgroundDiscovery").apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }
+            }
+        } catch (_: Exception) {}
+
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            if (wakeLock?.isHeld != true) {
+                wakeLock = powerManager.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "LocalShare:KeepAlive",
+                ).apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun releaseRuntimeLocks() {
+        try {
+            wifiLock?.let { if (it.isHeld) it.release() }
+        } catch (_: Exception) {}
+        try {
+            multicastLock?.let { if (it.isHeld) it.release() }
+        } catch (_: Exception) {}
+        try {
+            wakeLock?.let { if (it.isHeld) it.release() }
+        } catch (_: Exception) {}
+        wifiLock = null
+        multicastLock = null
+        wakeLock = null
     }
 }
