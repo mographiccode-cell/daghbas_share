@@ -1,23 +1,30 @@
-name: LocalShare 1.4.1 Android Delivery
+name: LocalShare 1.4.2 Final Android and Windows
 
 on:
   push:
     branches: [localshare-1.4.1-delivery]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
-  group: localshare-141-android-final
+  group: localshare-142-final
   cancel-in-progress: true
 
 jobs:
-  apk:
+  android:
+    name: Android APK + real startup smoke test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-      - name: Generate Android project
+
+      - name: Generate Android project with LocalShare icon
         shell: bash
         run: |
           set -euo pipefail
@@ -30,26 +37,47 @@ jobs:
           cp flutter_local_share/overrides/AndroidManifest.xml generated/android/app/src/main/AndroidManifest.xml
           mkdir -p generated/android/app/src/main/kotlin/com/mographiccode/local_share
           cp flutter_local_share/overrides/MainActivity.kt generated/android/app/src/main/kotlin/com/mographiccode/local_share/MainActivity.kt
+
+          python -m pip install --quiet pillow
           python - <<'PY'
           from pathlib import Path
-          p=Path('generated/android/app/build.gradle.kts')
-          s=p.read_text()
-          s=s.replace('minSdk = flutter.minSdkVersion', 'minSdk = 29')
+          from PIL import Image
+
+          source = Path('flutter_local_share/assets/localshare_icon.jpg')
+          if not source.exists():
+              raise SystemExit('LocalShare icon asset is missing')
+          src = Image.open(source).convert('RGBA')
+          if src.width != src.height:
+              raise SystemExit(f'LocalShare icon must be square, got {src.size}')
+          for dpi, size in [('mdpi',48),('hdpi',72),('xhdpi',96),('xxhdpi',144),('xxxhdpi',192)]:
+              out = Path(f'generated/android/app/src/main/res/mipmap-{dpi}/ic_launcher.png')
+              out.parent.mkdir(parents=True, exist_ok=True)
+              src.resize((size, size), Image.Resampling.LANCZOS).save(out)
+          print('Android launcher icon generated from', source, src.size)
+          PY
+
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('generated/android/app/build.gradle.kts')
+          s = p.read_text()
+          s = s.replace('minSdk = flutter.minSdkVersion', 'minSdk = 29')
           if 'isCoreLibraryDesugaringEnabled = true' not in s:
-              s=s.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
+              s = s.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
           if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")' not in s:
               s += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")\n}\n'
           p.write_text(s)
           PY
-          grep -q '^version: 1.4.1+8$' generated/pubspec.yaml
+
+          grep -q '^version: 1.4.2+9$' generated/pubspec.yaml
           grep -q 'FOREGROUND_SERVICE_CONNECTED_DEVICE' generated/android/app/src/main/AndroidManifest.xml
           grep -q 'POST_NOTIFICATIONS' generated/android/app/src/main/AndroidManifest.xml
           grep -q 'CHANGE_WIFI_MULTICAST_STATE' generated/android/app/src/main/AndroidManifest.xml
           grep -q 'CHANGE_WIFI_STATE' generated/android/app/src/main/AndroidManifest.xml
           grep -q 'LocalShareForegroundService' generated/android/app/src/main/AndroidManifest.xml
           grep -q 'android.intent.action.SEND_MULTIPLE' generated/android/app/src/main/AndroidManifest.xml
+          test -s generated/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-      - name: Fix analyze test and build
+      - name: Analyze test and build APK
         shell: bash
         run: |
           set -euo pipefail
@@ -62,23 +90,55 @@ jobs:
           flutter build apk --release
           unzip -t build/app/outputs/flutter-apk/app-release.apk >/dev/null
           cd ..
-          cp generated/build/app/outputs/flutter-apk/app-release.apk LocalShare-1.4.1-Android.apk
-          sha256sum LocalShare-1.4.1-Android.apk > LocalShare-1.4.1-Android.apk.sha256
+          cp generated/build/app/outputs/flutter-apk/app-release.apk LocalShare-1.4.2-Android.apk
+          sha256sum LocalShare-1.4.2-Android.apk > LocalShare-1.4.2-Android.apk.sha256
 
-      - name: Emulator launch and native background smoke test
+      - name: Android 15 UI and background smoke test
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 36
+          api-level: 35
           arch: x86_64
           profile: pixel_6
           disable-animations: true
           script: |
             set -e
-            adb install -r LocalShare-1.4.1-Android.apk
+            installed=0
+            for attempt in 1 2 3; do
+              if adb install --no-streaming -r LocalShare-1.4.2-Android.apk; then
+                installed=1
+                break
+              fi
+              adb kill-server || true
+              adb start-server
+              adb wait-for-device
+              sleep 5
+            done
+            test "$installed" = "1"
             adb shell pm grant com.mographiccode.local_share android.permission.POST_NOTIFICATIONS || true
+            adb logcat -c
             adb shell am start -n com.mographiccode.local_share/.MainActivity
             sleep 12
-            adb shell pidof com.mographiccode.local_share
+            pid="$(adb shell pidof com.mographiccode.local_share | tr -d '\r')"
+            test -n "$pid"
+            adb shell dumpsys window | grep -q 'com.mographiccode.local_share'
+            adb exec-out screencap -p > LocalShare-Android-startup.png
+            python - <<'PY'
+            from PIL import Image
+            im = Image.open('LocalShare-Android-startup.png').convert('RGB')
+            w, h = im.size
+            crop = im.crop((int(w*.08), int(h*.10), int(w*.92), int(h*.88)))
+            px = list(crop.getdata())
+            non_white = sum(1 for r,g,b in px if min(r,g,b) < 238)
+            ratio = non_white / max(1, len(px))
+            print(f'non-white startup content ratio={ratio:.4f}')
+            if ratio < 0.03:
+                raise SystemExit('Startup UI appears blank/white')
+            PY
+            adb logcat --pid="$pid" -d > LocalShare-Android-logcat.txt || true
+            if grep -Eiq 'FATAL EXCEPTION|Unhandled Exception|Dart Error' LocalShare-Android-logcat.txt; then
+              cat LocalShare-Android-logcat.txt
+              exit 1
+            fi
             adb shell dumpsys activity services com.mographiccode.local_share | grep -q LocalShareForegroundService
             adb shell input keyevent KEYCODE_HOME
             sleep 8
@@ -91,28 +151,217 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf source-package
-          cp -a generated source-package
-          rm -rf source-package/build source-package/.dart_tool
-          find source-package -type d -name .gradle -prune -exec rm -rf {} + || true
-          find source-package -type d -name build -prune -exec rm -rf {} + || true
-          printf '%s\n' \
-            'LocalShare 1.4.1+8' \
-            'Package: com.mographiccode.local_share' \
-            'Android minSdk: 29' \
-            'Validated on Android 16 / API 36 emulator' \
-            'Native foreground keepalive: LocalShareForegroundService' \
-            'Build: flutter pub get && flutter test && flutter build apk --release' \
-            > source-package/LOCALSHARE_BUILD_INFO.txt
-          zip -qr LocalShare-1.4.1-Android-Source.zip source-package
-          unzip -t LocalShare-1.4.1-Android-Source.zip >/dev/null
-          sha256sum LocalShare-1.4.1-Android-Source.zip > LocalShare-1.4.1-Android-Source.zip.sha256
+          cp -r generated source-package
+          rm -rf source-package/build source-package/.dart_tool source-package/android/.gradle source-package/android/app/build
+          cat > source-package/LOCALSHARE_BUILD_INFO.txt <<'EOF'
+          LocalShare 1.4.2+9
+          Package: com.mographiccode.local_share
+          Android minimum SDK: 29
+          Startup: notification initialization is non-blocking/fail-open.
+          Background: native connected-device foreground service.
+          Launcher icon: generated from the repository LocalShare icon asset.
+          EOF
+          (cd source-package && zip -qr ../LocalShare-1.4.2-Android-Source.zip .)
+          unzip -t LocalShare-1.4.2-Android-Source.zip >/dev/null
+          sha256sum LocalShare-1.4.2-Android-Source.zip > LocalShare-1.4.2-Android-Source.zip.sha256
 
       - uses: actions/upload-artifact@v4
         with:
-          name: LocalShare-1.4.1-Android-Final
-          if-no-files-found: error
+          name: LocalShare-1.4.2-Android-Final
           path: |
-            LocalShare-1.4.1-Android.apk
-            LocalShare-1.4.1-Android.apk.sha256
-            LocalShare-1.4.1-Android-Source.zip
-            LocalShare-1.4.1-Android-Source.zip.sha256
+            LocalShare-1.4.2-Android.apk
+            LocalShare-1.4.2-Android.apk.sha256
+            LocalShare-1.4.2-Android-Source.zip
+            LocalShare-1.4.2-Android-Source.zip.sha256
+            LocalShare-Android-startup.png
+            LocalShare-Android-logcat.txt
+          if-no-files-found: error
+
+  windows:
+    name: Windows installer + clean upgrade test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Windows project with LocalShare icon
+        shell: pwsh
+        run: |
+          if (Test-Path generated) { Remove-Item generated -Recurse -Force }
+          flutter config --enable-windows-desktop
+          flutter create --org com.mographiccode --project-name local_share --platforms=windows generated
+          Remove-Item generated/lib -Recurse -Force
+          Remove-Item generated/test -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item flutter_local_share/lib generated/lib -Recurse
+          Copy-Item flutter_local_share/test generated/test -Recurse
+          Copy-Item flutter_local_share/pubspec.yaml generated/pubspec.yaml -Force
+          python flutter_local_share/tools/patch_windows_temp_cleanup.py generated/windows/runner/main.cpp
+
+          python -m pip install --quiet pillow
+          @'
+          from pathlib import Path
+          from PIL import Image
+          source = Path('flutter_local_share/assets/localshare_icon.jpg')
+          if not source.exists():
+              raise SystemExit('LocalShare icon asset is missing')
+          src = Image.open(source).convert('RGBA')
+          if src.width != src.height:
+              raise SystemExit(f'LocalShare icon must be square, got {src.size}')
+          out = Path('generated/windows/runner/resources/app_icon.ico')
+          out.parent.mkdir(parents=True, exist_ok=True)
+          src.save(out, sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+          print('Windows icon generated from', source, src.size)
+          '@ | Set-Content icon_build.py -Encoding UTF8
+          python icon_build.py
+          if (-not (Test-Path generated/windows/runner/resources/app_icon.ico)) { throw 'Windows icon was not generated' }
+
+      - name: Analyze test and build Windows
+        shell: pwsh
+        run: |
+          Push-Location generated
+          flutter pub get
+          dart fix --apply
+          dart format lib test
+          flutter analyze --fatal-infos
+          flutter test
+          flutter build windows --release
+          Pop-Location
+
+      - name: Verify close-to-background behavior
+        shell: pwsh
+        run: |
+          $exe=(Resolve-Path 'generated/build/windows/x64/runner/Release/local_share.exe').Path
+          $p=Start-Process $exe -PassThru
+          Start-Sleep -Seconds 8
+          $p.Refresh()
+          if ($p.HasExited) { throw 'LocalShare exited before background test' }
+          $null=$p.CloseMainWindow()
+          Start-Sleep -Seconds 4
+          $p.Refresh()
+          if ($p.HasExited) { throw 'Closing LocalShare terminated the background process' }
+          Stop-Process -Id $p.Id -Force
+
+      - name: Build clean-upgrade installer with desktop shortcut
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          $release=(Resolve-Path 'generated/build/windows/x64/runner/Release').Path
+          $icon=(Resolve-Path 'generated/windows/runner/resources/app_icon.ico').Path
+          $iss=@"
+          [Setup]
+          AppId={{8D2D488C-246B-4BDC-8C24-7B10A65B9649}
+          AppName=LocalShare
+          AppVersion=1.4.2
+          AppVerName=LocalShare 1.4.2
+          AppPublisher=MographicCode LocalShare
+          DefaultDirName={autopf}\LocalShare
+          DefaultGroupName=LocalShare
+          OutputDir=$($PWD.Path)\artifacts
+          OutputBaseFilename=LocalShare-1.4.2-Windows-Setup
+          SetupIconFile=$icon
+          Compression=lzma2
+          SolidCompression=yes
+          WizardStyle=modern
+          ArchitecturesAllowed=x64compatible
+          ArchitecturesInstallIn64BitMode=x64compatible
+          PrivilegesRequired=admin
+          UninstallDisplayIcon={app}\local_share.exe
+          CloseApplications=yes
+          CloseApplicationsFilter=local_share.exe
+          RestartApplications=no
+          DisableProgramGroupPage=yes
+
+          [InstallDelete]
+          Type: filesandordirs; Name: "{app}\*"
+
+          [Files]
+          Source: "$release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+          [Icons]
+          Name: "{autoprograms}\LocalShare"; Filename: "{app}\local_share.exe"; WorkingDir: "{app}"; IconFilename: "{app}\local_share.exe"
+          Name: "{autodesktop}\LocalShare"; Filename: "{app}\local_share.exe"; WorkingDir: "{app}"; IconFilename: "{app}\local_share.exe"
+
+          [Run]
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare TCP"""; Flags: runhidden
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare UDP Discovery"""; Flags: runhidden
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""LocalShare TCP"" dir=in action=allow protocol=TCP localport=40404 profile=private"; Flags: runhidden
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""LocalShare UDP Discovery"" dir=in action=allow protocol=UDP localport=40405 profile=private"; Flags: runhidden
+
+          [UninstallRun]
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare TCP"""; Flags: runhidden; RunOnceId: "RemoveLocalShareTcp"
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare UDP Discovery"""; Flags: runhidden; RunOnceId: "RemoveLocalShareUdp"
+
+          [Code]
+          const
+            LocalShareUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{8D2D488C-246B-4BDC-8C24-7B10A65B9649}_is1';
+
+          function FindPreviousUninstaller(): String;
+          begin
+            Result := '';
+            if RegQueryStringValue(HKLM64, LocalShareUninstallKey, 'UninstallString', Result) then Exit;
+            if RegQueryStringValue(HKLM, LocalShareUninstallKey, 'UninstallString', Result) then Exit;
+            RegQueryStringValue(HKCU, LocalShareUninstallKey, 'UninstallString', Result);
+          end;
+
+          function InitializeSetup(): Boolean;
+          var
+            Uninstaller: String;
+            ResultCode: Integer;
+          begin
+            Result := True;
+            Uninstaller := RemoveQuotes(FindPreviousUninstaller());
+            if (Uninstaller <> '') and FileExists(Uninstaller) then
+            begin
+              if not Exec(Uninstaller, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE,
+                ewWaitUntilTerminated, ResultCode) then
+              begin
+                MsgBox('تعذر إزالة النسخة السابقة من LocalShare. أغلق التطبيق ثم أعد التثبيت.', mbError, MB_OK);
+                Result := False;
+                Exit;
+              end;
+              if ResultCode <> 0 then
+              begin
+                MsgBox('فشل حذف النسخة السابقة من LocalShare قبل التثبيت.', mbError, MB_OK);
+                Result := False;
+              end;
+            end;
+          end;
+          "@
+          Set-Content installer.iss $iss -Encoding UTF8
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-FileHash artifacts/LocalShare-1.4.2-Windows-Setup.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  LocalShare-1.4.2-Windows-Setup.exe" } | Set-Content artifacts/LocalShare-1.4.2-Windows-Setup.exe.sha256
+
+      - name: Test installer removes previous files and creates desktop shortcut
+        shell: pwsh
+        run: |
+          $installer=(Resolve-Path 'artifacts/LocalShare-1.4.2-Windows-Setup.exe').Path
+          $args='/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'
+          $first=Start-Process $installer -ArgumentList $args -Wait -PassThru
+          if ($first.ExitCode -ne 0) { throw "First installer run failed: $($first.ExitCode)" }
+          $appDir=Join-Path $env:ProgramFiles 'LocalShare'
+          $exe=Join-Path $appDir 'local_share.exe'
+          if (-not (Test-Path $exe)) { throw 'Installed LocalShare executable is missing' }
+          Set-Content (Join-Path $appDir 'old_version_marker.txt') 'must be removed on upgrade'
+          $second=Start-Process $installer -ArgumentList $args -Wait -PassThru
+          if ($second.ExitCode -ne 0) { throw "Upgrade installer run failed: $($second.ExitCode)" }
+          if (Test-Path (Join-Path $appDir 'old_version_marker.txt')) { throw 'Previous installation files were not removed' }
+          if (-not (Test-Path $exe)) { throw 'LocalShare executable missing after clean upgrade' }
+          $desktopCandidates=@(
+            (Join-Path $env:PUBLIC 'Desktop\LocalShare.lnk'),
+            (Join-Path ([Environment]::GetFolderPath('Desktop')) 'LocalShare.lnk')
+          )
+          if (-not ($desktopCandidates | Where-Object { Test-Path $_ })) { throw 'Desktop shortcut was not created' }
+          Write-Host 'Clean-upgrade and desktop shortcut checks passed.'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LocalShare-1.4.2-Windows-Final
+          path: |
+            artifacts/LocalShare-1.4.2-Windows-Setup.exe
+            artifacts/LocalShare-1.4.2-Windows-Setup.exe.sha256
+          if-no-files-found: error
