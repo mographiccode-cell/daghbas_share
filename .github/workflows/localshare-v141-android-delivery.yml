@@ -4,6 +4,10 @@ on:
   push:
     branches: [localshare-1.4.1-delivery]
 
+concurrency:
+  group: localshare-141-android-final
+  cancel-in-progress: true
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -41,6 +45,8 @@ jobs:
           grep -q 'FOREGROUND_SERVICE_CONNECTED_DEVICE' generated/android/app/src/main/AndroidManifest.xml
           grep -q 'POST_NOTIFICATIONS' generated/android/app/src/main/AndroidManifest.xml
           grep -q 'CHANGE_WIFI_MULTICAST_STATE' generated/android/app/src/main/AndroidManifest.xml
+          grep -q 'CHANGE_WIFI_STATE' generated/android/app/src/main/AndroidManifest.xml
+          grep -q 'LocalShareForegroundService' generated/android/app/src/main/AndroidManifest.xml
           grep -q 'android.intent.action.SEND_MULTIPLE' generated/android/app/src/main/AndroidManifest.xml
 
       - name: Fix analyze test and build
@@ -59,7 +65,7 @@ jobs:
           cp generated/build/app/outputs/flutter-apk/app-release.apk LocalShare-1.4.1-Android.apk
           sha256sum LocalShare-1.4.1-Android.apk > LocalShare-1.4.1-Android.apk.sha256
 
-      - name: Emulator launch and background smoke test
+      - name: Emulator launch and native background smoke test
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
@@ -70,13 +76,14 @@ jobs:
             set -e
             adb install -r LocalShare-1.4.1-Android.apk
             adb shell pm grant com.mographiccode.local_share android.permission.POST_NOTIFICATIONS || true
-            adb shell am start -W -n com.mographiccode.local_share/.MainActivity
-            sleep 10
+            adb shell am start -n com.mographiccode.local_share/.MainActivity
+            sleep 12
             adb shell pidof com.mographiccode.local_share
+            adb shell dumpsys activity services com.mographiccode.local_share | grep -q LocalShareForegroundService
             adb shell input keyevent KEYCODE_HOME
-            sleep 6
+            sleep 8
             adb shell pidof com.mographiccode.local_share
-            adb shell dumpsys activity services com.mographiccode.local_share | grep -q IsolateHolderService
+            adb shell dumpsys activity services com.mographiccode.local_share | grep -q LocalShareForegroundService
             adb shell am force-stop com.mographiccode.local_share
 
       - name: Package exact Android Flutter source
@@ -93,6 +100,7 @@ jobs:
             'Package: com.mographiccode.local_share' \
             'Android minSdk: 29' \
             'Validated on Android 16 / API 36 emulator' \
+            'Native foreground keepalive: LocalShareForegroundService' \
             'Build: flutter pub get && flutter test && flutter build apk --release' \
             > source-package/LOCALSHARE_BUILD_INFO.txt
           zip -qr LocalShare-1.4.1-Android-Source.zip source-package
