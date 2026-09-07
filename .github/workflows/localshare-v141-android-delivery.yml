@@ -91,6 +91,14 @@ jobs:
           cp generated/build/app/outputs/flutter-apk/app-release.apk LocalShare-1.4.2-Android.apk
           sha256sum LocalShare-1.4.2-Android.apk > LocalShare-1.4.2-Android.apk.sha256
 
+      - name: Enable Android emulator acceleration
+        shell: bash
+        run: |
+          if [ -e /dev/kvm ]; then
+            sudo chmod a+rw /dev/kvm
+            ls -l /dev/kvm
+          fi
+
       - name: Android 15 UI and background smoke test
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -98,51 +106,8 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: |
-            set -e
-            installed=0
-            for attempt in 1 2 3; do
-              if adb install --no-streaming -r LocalShare-1.4.2-Android.apk; then
-                installed=1
-                break
-              fi
-              adb kill-server || true
-              adb start-server
-              adb wait-for-device
-              sleep 5
-            done
-            test "$installed" = "1"
-            adb shell pm grant com.mographiccode.local_share android.permission.POST_NOTIFICATIONS || true
-            adb logcat -c
-            adb shell am start -n com.mographiccode.local_share/.MainActivity
-            sleep 12
-            pid="$(adb shell pidof com.mographiccode.local_share | tr -d '\r')"
-            test -n "$pid"
-            adb shell dumpsys window | grep -q 'com.mographiccode.local_share'
-            adb exec-out screencap -p > LocalShare-Android-startup.png
-            python - <<'PY'
-            from PIL import Image
-            im = Image.open('LocalShare-Android-startup.png').convert('RGB')
-            w, h = im.size
-            crop = im.crop((int(w*.08), int(h*.10), int(w*.92), int(h*.88)))
-            px = list(crop.getdata())
-            non_white = sum(1 for r,g,b in px if min(r,g,b) < 238)
-            ratio = non_white / max(1, len(px))
-            print(f'non-white startup content ratio={ratio:.4f}')
-            if ratio < 0.03:
-                raise SystemExit('Startup UI appears blank/white')
-            PY
-            adb logcat --pid="$pid" -d > LocalShare-Android-logcat.txt || true
-            if grep -Eiq 'FATAL EXCEPTION|Unhandled Exception|Dart Error' LocalShare-Android-logcat.txt; then
-              cat LocalShare-Android-logcat.txt
-              exit 1
-            fi
-            adb shell dumpsys activity services com.mographiccode.local_share | grep -q LocalShareForegroundService
-            adb shell input keyevent KEYCODE_HOME
-            sleep 8
-            adb shell pidof com.mographiccode.local_share
-            adb shell dumpsys activity services com.mographiccode.local_share | grep -q LocalShareForegroundService
-            adb shell am force-stop com.mographiccode.local_share
+          disable-linux-hw-accel: false
+          script: bash flutter_local_share/tools/android_runtime_smoke.sh LocalShare-1.4.2-Android.apk
 
       - name: Package exact Android Flutter source
         shell: bash
@@ -158,6 +123,7 @@ jobs:
           Startup: notification initialization is non-blocking/fail-open.
           Background: native connected-device foreground service.
           Launcher icon: generated from the canonical LocalShare icon generator.
+          Runtime smoke: Android 15 install + visible UI screenshot + logcat + foreground service background survival.
           EOF
           (cd source-package && zip -qr ../LocalShare-1.4.2-Android-Source.zip .)
           unzip -t LocalShare-1.4.2-Android-Source.zip >/dev/null
@@ -177,6 +143,7 @@ jobs:
 
   windows:
     name: Windows installer + clean upgrade test
+    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[android-only]') }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
