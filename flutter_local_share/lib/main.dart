@@ -89,8 +89,15 @@ class _LocalShareShellState extends State<LocalShareShell>
     _nativeShareChannel.setMethodCallHandler(_handleNativeShareMethod);
     unawaited(service.init().then((_) => _consumePendingAndroidShares()));
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(notifications.requestPermission());
+      unawaited(_startPostLaunchServices());
     });
+  }
+
+  Future<void> _startPostLaunchServices() async {
+    await notifications.requestPermission();
+    if (Platform.isAndroid) {
+      await LocalShareRuntimeKeepAlive.enableAndroidBackgroundAfterLaunch();
+    }
   }
 
   @override

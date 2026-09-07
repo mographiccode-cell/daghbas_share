@@ -124,6 +124,11 @@ class LocalShareService extends ChangeNotifier {
       _rotatePairCode();
       receiveDirectory = await _prepareReceiveDirectory();
       localIp = await _bestLocalIp();
+      if (Platform.isAndroid) {
+        try {
+          await _native.invokeMethod<void>('acquireMulticastLock');
+        } catch (_) {}
+      }
       await _startServer();
       await _startDiscovery();
       _pairCodeTimer = Timer.periodic(
@@ -223,16 +228,45 @@ class LocalShareService extends ChangeNotifier {
         type: InternetAddressType.IPv4,
         includeLoopback: false,
       );
-      final addresses = <String>[];
+      final candidates = <({String ip, int score})>[];
       for (final interface in interfaces) {
+        final name = interface.name.toLowerCase();
+        final virtual =
+            name.contains('wsl') ||
+            name.contains('vethernet') ||
+            name.contains('docker') ||
+            name.contains('vmware') ||
+            name.contains('virtualbox') ||
+            name.contains('tailscale') ||
+            name.contains('zerotier') ||
+            name.contains('vpn');
+        var interfaceScore = 0;
+        if (name.contains('wi-fi') ||
+            name.contains('wifi') ||
+            name.contains('wlan')) {
+          interfaceScore += 120;
+        } else if (name.contains('ethernet') || name.startsWith('eth')) {
+          interfaceScore += 90;
+        }
+        if (virtual) interfaceScore -= 250;
         for (final address in interface.addresses) {
-          if (!address.isLoopback) addresses.add(address.address);
+          final ip = address.address;
+          if (address.isLoopback || !_isPrivateIp(ip)) continue;
+          var score = interfaceScore;
+          if (ip.startsWith('192.168.')) {
+            score += 45;
+          } else if (ip.startsWith('10.')) {
+            score += 30;
+          } else {
+            score += 20;
+          }
+          candidates.add((ip: ip, score: score));
         }
       }
-      for (final ip in addresses) {
-        if (_isPrivateIp(ip)) return ip;
+      if (candidates.isNotEmpty) {
+        candidates.sort((a, b) => b.score.compareTo(a.score));
+        return candidates.first.ip;
       }
-      if (addresses.isNotEmpty) return addresses.first;
     } catch (_) {}
     return '—';
   }
@@ -341,7 +375,19 @@ class LocalShareService extends ChangeNotifier {
   }
 
   void _broadcastPresence() {
-    _sendDiscovery('DISCOVER', InternetAddress('255.255.255.255'));
+    final targets = <String>{'255.255.255.255'};
+    final parts = localIp.split('.');
+    if (parts.length == 4 && _isPrivateIp(localIp)) {
+      targets.add('${parts[0]}.${parts[1]}.${parts[2]}.255');
+    }
+    for (final peer in _paired.values) {
+      if (_isValidLanIp(peer.ip)) targets.add(peer.ip);
+    }
+    for (final target in targets) {
+      try {
+        _sendDiscovery('DISCOVER', InternetAddress(target));
+      } catch (_) {}
+    }
   }
 
   void _sendDiscovery(String type, InternetAddress address) {
