@@ -39,21 +39,19 @@ jobs:
           cp flutter_local_share/overrides/MainActivity.kt generated/android/app/src/main/kotlin/com/mographiccode/local_share/MainActivity.kt
 
           python -m pip install --quiet pillow
+          python flutter_local_share/tools/generate_localshare_icon.py localshare_icon.png
           python - <<'PY'
           from pathlib import Path
           from PIL import Image
-
-          source = Path('flutter_local_share/assets/localshare_icon.jpg')
-          if not source.exists():
-              raise SystemExit('LocalShare icon asset is missing')
+          source = Path('localshare_icon.png')
           src = Image.open(source).convert('RGBA')
           if src.width != src.height:
-              raise SystemExit(f'LocalShare icon must be square, got {src.size}')
+              raise SystemExit(f'Generated LocalShare icon must be square, got {src.size}')
           for dpi, size in [('mdpi',48),('hdpi',72),('xhdpi',96),('xxhdpi',144),('xxxhdpi',192)]:
               out = Path(f'generated/android/app/src/main/res/mipmap-{dpi}/ic_launcher.png')
               out.parent.mkdir(parents=True, exist_ok=True)
               src.resize((size, size), Image.Resampling.LANCZOS).save(out)
-          print('Android launcher icon generated from', source, src.size)
+          print('Android launcher icon generated successfully', src.size)
           PY
 
           python - <<'PY'
@@ -159,7 +157,7 @@ jobs:
           Android minimum SDK: 29
           Startup: notification initialization is non-blocking/fail-open.
           Background: native connected-device foreground service.
-          Launcher icon: generated from the repository LocalShare icon asset.
+          Launcher icon: generated from the canonical LocalShare icon generator.
           EOF
           (cd source-package && zip -qr ../LocalShare-1.4.2-Android-Source.zip .)
           unzip -t LocalShare-1.4.2-Android-Source.zip >/dev/null
@@ -202,19 +200,18 @@ jobs:
           python flutter_local_share/tools/patch_windows_temp_cleanup.py generated/windows/runner/main.cpp
 
           python -m pip install --quiet pillow
+          python flutter_local_share/tools/generate_localshare_icon.py localshare_icon.png
           @'
           from pathlib import Path
           from PIL import Image
-          source = Path('flutter_local_share/assets/localshare_icon.jpg')
-          if not source.exists():
-              raise SystemExit('LocalShare icon asset is missing')
+          source = Path('localshare_icon.png')
           src = Image.open(source).convert('RGBA')
           if src.width != src.height:
-              raise SystemExit(f'LocalShare icon must be square, got {src.size}')
+              raise SystemExit(f'Generated LocalShare icon must be square, got {src.size}')
           out = Path('generated/windows/runner/resources/app_icon.ico')
           out.parent.mkdir(parents=True, exist_ok=True)
           src.save(out, sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
-          print('Windows icon generated from', source, src.size)
+          print('Windows icon generated successfully', src.size)
           '@ | Set-Content icon_build.py -Encoding UTF8
           python icon_build.py
           if (-not (Test-Path generated/windows/runner/resources/app_icon.ico)) { throw 'Windows icon was not generated' }
