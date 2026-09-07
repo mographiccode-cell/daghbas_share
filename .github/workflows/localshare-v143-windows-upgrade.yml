@@ -1,0 +1,289 @@
+name: LocalShare 1.4.3 Windows Upgrade Fix
+
+on:
+  push:
+    branches: [localshare-1.4.3-windows-upgrade]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: localshare-143-windows-upgrade
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows clean upgrade + desktop shortcut
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Windows project and LocalShare icon
+        shell: pwsh
+        run: |
+          if (Test-Path generated) { Remove-Item generated -Recurse -Force }
+          flutter config --enable-windows-desktop
+          flutter create --org com.mographiccode --project-name local_share --platforms=windows generated
+          Remove-Item generated/lib -Recurse -Force
+          Remove-Item generated/test -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item flutter_local_share/lib generated/lib -Recurse
+          Copy-Item flutter_local_share/test generated/test -Recurse
+          Copy-Item flutter_local_share/pubspec.yaml generated/pubspec.yaml -Force
+          python flutter_local_share/tools/patch_windows_temp_cleanup.py generated/windows/runner/main.cpp
+          python -m pip install --quiet pillow
+          python flutter_local_share/tools/generate_localshare_icon.py localshare_icon.png
+          @'
+          from pathlib import Path
+          from PIL import Image
+          src = Image.open('localshare_icon.png').convert('RGBA')
+          out = Path('generated/windows/runner/resources/app_icon.ico')
+          out.parent.mkdir(parents=True, exist_ok=True)
+          src.save(out, sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+          print('Windows icon:', src.size, out)
+          '@ | Set-Content icon_build.py -Encoding UTF8
+          python icon_build.py
+          if (-not (Test-Path generated/windows/runner/resources/app_icon.ico)) { throw 'Windows icon missing' }
+          if ((Get-Content generated/pubspec.yaml -Raw) -notmatch 'version: 1\.4\.3\+10') { throw 'Unexpected app version' }
+
+      - name: Analyze test and build Windows
+        shell: pwsh
+        run: |
+          Push-Location generated
+          flutter pub get
+          dart fix --apply
+          dart format lib test
+          flutter analyze --fatal-infos
+          flutter test
+          flutter build windows --release
+          Pop-Location
+          if (-not (Test-Path 'generated/build/windows/x64/runner/Release/local_share.exe')) { throw 'Windows executable missing' }
+
+      - name: Build robust LocalShare installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          $release=(Resolve-Path 'generated/build/windows/x64/runner/Release').Path
+          $icon=(Resolve-Path 'generated/windows/runner/resources/app_icon.ico').Path
+          $iss=@"
+          [Setup]
+          AppId={{8D2D488C-246B-4BDC-8C24-7B10A65B9649}
+          AppName=LocalShare
+          AppVersion=1.4.3
+          AppVerName=LocalShare 1.4.3
+          AppPublisher=MographicCode LocalShare
+          DefaultDirName={autopf}\LocalShare
+          DefaultGroupName=LocalShare
+          OutputDir=$($PWD.Path)\artifacts
+          OutputBaseFilename=LocalShare-1.4.3-Windows-Setup
+          SetupIconFile=$icon
+          Compression=lzma2
+          SolidCompression=yes
+          WizardStyle=modern
+          ArchitecturesAllowed=x64compatible
+          ArchitecturesInstallIn64BitMode=x64compatible
+          PrivilegesRequired=admin
+          UninstallDisplayIcon={app}\local_share.exe
+          CloseApplications=yes
+          CloseApplicationsFilter=local_share.exe LocalShare.exe
+          RestartApplications=no
+          DisableProgramGroupPage=yes
+          UsePreviousAppDir=no
+          CreateUninstallRegKey=yes
+          Uninstallable=yes
+
+          [InstallDelete]
+          Type: filesandordirs; Name: "{app}\*"
+          Type: files; Name: "{commondesktop}\LocalShare.lnk"
+          Type: files; Name: "{userdesktop}\LocalShare.lnk"
+
+          [Files]
+          Source: "$release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+          [Icons]
+          Name: "{commonprograms}\LocalShare"; Filename: "{app}\local_share.exe"; WorkingDir: "{app}"; IconFilename: "{app}\local_share.exe"
+          Name: "{commondesktop}\LocalShare"; Filename: "{app}\local_share.exe"; WorkingDir: "{app}"; IconFilename: "{app}\local_share.exe"
+
+          [Run]
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare TCP"""; Flags: runhidden
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare UDP Discovery"""; Flags: runhidden
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""LocalShare TCP"" dir=in action=allow protocol=TCP localport=40404 profile=private remoteip=LocalSubnet"; Flags: runhidden
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""LocalShare UDP Discovery"" dir=in action=allow protocol=UDP localport=40405 profile=private remoteip=LocalSubnet"; Flags: runhidden
+
+          [UninstallRun]
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare TCP"""; Flags: runhidden; RunOnceId: "RemoveLocalShareTcp"
+          Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""LocalShare UDP Discovery"""; Flags: runhidden; RunOnceId: "RemoveLocalShareUdp"
+
+          [Code]
+          const
+            UninstallRoot = 'Software\Microsoft\Windows\CurrentVersion\Uninstall';
+
+          function ExtractExePath(CommandLine: String): String;
+          var
+            P: Integer;
+          begin
+            Result := Trim(CommandLine);
+            if Result = '' then Exit;
+            if Result[1] = '"' then
+            begin
+              Delete(Result, 1, 1);
+              P := Pos('"', Result);
+              if P > 0 then Result := Copy(Result, 1, P - 1);
+            end
+            else
+            begin
+              P := Pos(' ', Result);
+              if P > 0 then Result := Copy(Result, 1, P - 1);
+            end;
+          end;
+
+          procedure KillOldLocalShare;
+          var
+            ResultCode: Integer;
+          begin
+            Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM local_share.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+            Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM LocalShare.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+          end;
+
+          function IsLocalShareName(const DisplayName: String): Boolean;
+          var
+            N: String;
+          begin
+            N := Lowercase(Trim(DisplayName));
+            Result := (N = 'localshare') or (Pos('localshare ', N) = 1) or (Pos('localshare-', N) = 1);
+          end;
+
+          procedure RemoveLocalShareFromRoot(RootKey: Integer);
+          var
+            Names: TArrayOfString;
+            I, ResultCode: Integer;
+            KeyName, DisplayName, CommandLine, Uninstaller: String;
+          begin
+            if not RegGetSubkeyNames(RootKey, UninstallRoot, Names) then Exit;
+            for I := 0 to GetArrayLength(Names) - 1 do
+            begin
+              KeyName := UninstallRoot + '\' + Names[I];
+              DisplayName := '';
+              if RegQueryStringValue(RootKey, KeyName, 'DisplayName', DisplayName) and IsLocalShareName(DisplayName) then
+              begin
+                CommandLine := '';
+                if RegQueryStringValue(RootKey, KeyName, 'UninstallString', CommandLine) then
+                begin
+                  Uninstaller := ExtractExePath(CommandLine);
+                  if (Uninstaller <> '') and FileExists(Uninstaller) then
+                  begin
+                    Log('Removing previous LocalShare: ' + Uninstaller);
+                    Exec(Uninstaller, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+                    Sleep(500);
+                  end;
+                end;
+              end;
+            end;
+          end;
+
+          function InitializeSetup(): Boolean;
+          begin
+            Result := True;
+            KillOldLocalShare;
+            RemoveLocalShareFromRoot(HKLM64);
+            RemoveLocalShareFromRoot(HKLM32);
+            RemoveLocalShareFromRoot(HKCU);
+            KillOldLocalShare;
+
+            DelTree(ExpandConstant('{autopf}\LocalShare'), True, True, True);
+            if IsWin64 then DelTree(ExpandConstant('{pf32}\LocalShare'), True, True, True);
+            DeleteFile(ExpandConstant('{commondesktop}\LocalShare.lnk'));
+            DeleteFile(ExpandConstant('{userdesktop}\LocalShare.lnk'));
+          end;
+          "@
+          Set-Content installer.iss $iss -Encoding UTF8
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path 'artifacts/LocalShare-1.4.3-Windows-Setup.exe')) { throw 'Installer missing' }
+          Get-FileHash artifacts/LocalShare-1.4.3-Windows-Setup.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  LocalShare-1.4.3-Windows-Setup.exe" } | Set-Content artifacts/LocalShare-1.4.3-Windows-Setup.exe.sha256
+
+      - name: Build different-AppId legacy installer for upgrade test
+        shell: pwsh
+        run: |
+          $release=(Resolve-Path 'generated/build/windows/x64/runner/Release').Path
+          Set-Content legacy_marker.txt 'LEGACY_LOCALSHARE_MUST_BE_REMOVED' -Encoding ASCII
+          $legacy=@"
+          [Setup]
+          AppId={{11111111-2222-3333-4444-555555555555}
+          AppName=LocalShare
+          AppVersion=0.9.0
+          AppPublisher=Legacy LocalShare Test
+          DefaultDirName={autopf}\LocalShare
+          OutputDir=$($PWD.Path)\legacy-artifacts
+          OutputBaseFilename=LocalShare-Legacy-Test
+          PrivilegesRequired=admin
+          ArchitecturesAllowed=x64compatible
+          ArchitecturesInstallIn64BitMode=x64compatible
+          Uninstallable=yes
+          CreateUninstallRegKey=yes
+          [Files]
+          Source: "$release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+          Source: "$($PWD.Path)\legacy_marker.txt"; DestDir: "{app}"; Flags: ignoreversion
+          [Icons]
+          Name: "{commondesktop}\LocalShare"; Filename: "{app}\local_share.exe"
+          "@
+          Set-Content legacy.iss $legacy -Encoding UTF8
+          New-Item -ItemType Directory -Force legacy-artifacts | Out-Null
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' legacy.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test legacy removal same-version upgrade and desktop shortcut target
+        shell: pwsh
+        run: |
+          $legacy=(Resolve-Path 'legacy-artifacts/LocalShare-Legacy-Test.exe').Path
+          $installer=(Resolve-Path 'artifacts/LocalShare-1.4.3-Windows-Setup.exe').Path
+          $args='/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'
+          $appDir=Join-Path $env:ProgramFiles 'LocalShare'
+          $exe=Join-Path $appDir 'local_share.exe'
+          $marker=Join-Path $appDir 'legacy_marker.txt'
+          $publicLink=Join-Path $env:PUBLIC 'Desktop\LocalShare.lnk'
+
+          $r=Start-Process $legacy -ArgumentList $args -Wait -PassThru
+          if ($r.ExitCode -ne 0) { throw "Legacy install failed: $($r.ExitCode)" }
+          if (-not (Test-Path $marker)) { throw 'Legacy marker not installed' }
+
+          $old=Start-Process $exe -PassThru
+          Start-Sleep -Seconds 5
+          $old.Refresh()
+          if ($old.HasExited) { throw 'Legacy LocalShare process did not stay running for replacement test' }
+
+          $r=Start-Process $installer -ArgumentList $args -Wait -PassThru
+          if ($r.ExitCode -ne 0) { throw "Upgrade from different AppId failed: $($r.ExitCode)" }
+          if (Test-Path $marker) { throw 'Different-AppId previous LocalShare was not removed' }
+          if (-not (Test-Path $exe)) { throw 'New LocalShare executable missing after upgrade' }
+          if (Get-Process -Name local_share -ErrorAction SilentlyContinue) { throw 'Old LocalShare process survived upgrade' }
+          if (-not (Test-Path $publicLink)) { throw 'Public desktop shortcut was not created' }
+
+          $ws=New-Object -ComObject WScript.Shell
+          $shortcut=$ws.CreateShortcut($publicLink)
+          if ([IO.Path]::GetFullPath($shortcut.TargetPath) -ne [IO.Path]::GetFullPath($exe)) {
+            throw "Desktop shortcut target is wrong: $($shortcut.TargetPath)"
+          }
+
+          Set-Content (Join-Path $appDir 'same_appid_old_marker.txt') 'REMOVE_ME' -Encoding ASCII
+          $r=Start-Process $installer -ArgumentList $args -Wait -PassThru
+          if ($r.ExitCode -ne 0) { throw "Same-AppId upgrade failed: $($r.ExitCode)" }
+          if (Test-Path (Join-Path $appDir 'same_appid_old_marker.txt')) { throw 'Same-AppId previous files were not removed' }
+          if (-not (Test-Path $publicLink)) { throw 'Desktop shortcut missing after second update' }
+
+          $shortcut=$ws.CreateShortcut($publicLink)
+          if ([IO.Path]::GetFullPath($shortcut.TargetPath) -ne [IO.Path]::GetFullPath($exe)) { throw 'Desktop shortcut target changed after update' }
+          Write-Host 'ROBUST_WINDOWS_UPGRADE_AND_DESKTOP_SHORTCUT_OK'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LocalShare-1.4.3-Windows-Final
+          path: |
+            artifacts/LocalShare-1.4.3-Windows-Setup.exe
+            artifacts/LocalShare-1.4.3-Windows-Setup.exe.sha256
+          if-no-files-found: error
