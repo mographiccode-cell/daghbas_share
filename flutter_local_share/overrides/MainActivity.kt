@@ -1,8 +1,10 @@
 package com.mographiccode.local_share
 
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Environment
 import android.os.Handler
@@ -25,6 +27,7 @@ class MainActivity : FlutterActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val pendingShares = mutableListOf<Map<String, Any>>()
     private var nativeChannel: MethodChannel? = null
+    private var multicastLock: WifiManager.MulticastLock? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -86,6 +89,15 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                "acquireMulticastLock" -> {
+                    try {
+                        acquireMulticastLock()
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("MULTICAST_LOCK_FAILED", e.message ?: "Unable to enable LAN discovery", null)
+                    }
+                }
+
                 "consumeSharedItems" -> {
                     val items = synchronized(pendingShares) {
                         val copy = pendingShares.toList()
@@ -106,6 +118,25 @@ class MainActivity : FlutterActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         captureShareIntent(intent)
+    }
+
+    override fun onDestroy() {
+        try {
+            multicastLock?.let { if (it.isHeld) it.release() }
+        } catch (_: Exception) {}
+        multicastLock = null
+        nativeChannel = null
+        executor.shutdownNow()
+        super.onDestroy()
+    }
+
+    private fun acquireMulticastLock() {
+        if (multicastLock?.isHeld == true) return
+        val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        multicastLock = wifiManager.createMulticastLock("LocalShareDiscovery").apply {
+            setReferenceCounted(false)
+            acquire()
+        }
     }
 
     private fun captureShareIntent(sourceIntent: Intent?) {
