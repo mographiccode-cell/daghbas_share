@@ -1,1 +1,1 @@
-trigger Mustanadati v2.7.0 light-only file manager rename copy delete pin read-later grid PDF Excel UX build 2026-09-15
+trigger final Mustanadati v2.7.0 source export with light-only rename copy delete pin read-later grid resume readers 2026-09-15
