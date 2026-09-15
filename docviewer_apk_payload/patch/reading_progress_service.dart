@@ -33,6 +33,19 @@ class ReadingProgressService {
     await _prefs.setDouble(_key('docx.offset', path), offset);
   }
 
+  Future<void> migratePath(String oldPath, String newPath) async {
+    if (oldPath == newPath) return;
+    final pdf = await _prefs.getInt(_key('pdf.page', oldPath));
+    final docx = await _prefs.getDouble(_key('docx.offset', oldPath));
+    if (pdf != null && pdf > 0) {
+      await _prefs.setInt(_key('pdf.page', newPath), pdf);
+    }
+    if (docx != null && docx >= 0 && docx.isFinite) {
+      await _prefs.setDouble(_key('docx.offset', newPath), docx);
+    }
+    await clear(oldPath);
+  }
+
   Future<void> clear(String path) async {
     await _prefs.remove(_key('pdf.page', path));
     await _prefs.remove(_key('docx.offset', path));
