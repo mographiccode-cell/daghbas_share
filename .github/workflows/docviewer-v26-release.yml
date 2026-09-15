@@ -1,14 +1,14 @@
-name: Mustanadati v2.6 stable package release
+name: Mustanadati v2.7 light file manager release
 on:
   pull_request:
     branches: [main]
 permissions:
   contents: read
 jobs:
-  build-v26:
+  build-v27:
     if: github.head_ref == 'docviewer-apk-build-20260821'
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -17,7 +17,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Reconstruct v2.6
+      - name: Reconstruct v2.7
         run: |
           mkdir -p docviewer_build
           cat docviewer_apk_payload/part*.b64 | base64 -d > /tmp/docviewer.tar.gz
@@ -33,11 +33,18 @@ jobs:
           sed -i '/allowMultiple: true,/d' docviewer_build/lib/services/file_service.dart
           sed -i 's/separatorBuilder: (_, __)/separatorBuilder: (_, _)/g' docviewer_build/lib/screens/viewer_screen.dart
           rm -f docviewer_build/lib/services/document_viewer_service.dart
-          grep -q 'version: 2.6.0+8' docviewer_build/pubspec.yaml
-          grep -q 'savePdfPage' docviewer_build/lib/screens/viewer_screen.dart
-          grep -q 'saveDocxOffset' docviewer_build/lib/screens/viewer_screen.dart
-          grep -q '_decodeXlsx' docviewer_build/lib/screens/viewer_screen.dart
-          ! grep -A10 'item.kind == DocumentKind.excel' docviewer_build/lib/screens/viewer_screen.dart | grep 'DocViewerView'
+          cd docviewer_build
+          python3 ../docviewer_apk_payload/patch/v27_patch.py
+          grep -q 'version: 2.7.0+9' pubspec.yaml
+          grep -q '_renameItem' lib/screens/home_screen.dart
+          grep -q '_duplicateItem' lib/screens/home_screen.dart
+          grep -q '_deleteItem' lib/screens/home_screen.dart
+          grep -q 'ui.pinned_paths' lib/screens/home_screen.dart
+          grep -q 'ThemeMode.light' lib/main.dart
+          grep -q 'migratePath' lib/services/reading_progress_service.dart
+          grep -q 'صفحة \$visiblePage' lib/screens/viewer_screen.dart
+          grep -q 'بحث داخل الورقة' lib/screens/viewer_screen.dart
+          ! grep -A10 'item.kind == DocumentKind.excel' lib/screens/viewer_screen.dart | grep 'DocViewerView'
 
       - name: Bootstrap Android
         working-directory: docviewer_build
@@ -116,7 +123,7 @@ jobs:
         working-directory: docviewer_build
         run: |
           mkdir -p test
-          cat > test/v26_test.dart <<'DART'
+          cat > test/v27_test.dart <<'DART'
           import 'package:flutter_test/flutter_test.dart';
           import 'package:universal_doc_viewer/models/document_item.dart';
           void main() {
@@ -128,29 +135,34 @@ jobs:
             });
           }
           DART
-          flutter test test/v26_test.dart
+          flutter test test/v27_test.dart
           grep -q 'initialPageNumber' lib/screens/viewer_screen.dart
           grep -q 'savePdfPage' lib/screens/viewer_screen.dart
           grep -q 'scrollController: _documentScroll' lib/screens/viewer_screen.dart
           grep -q 'saveDocxOffset' lib/screens/viewer_screen.dart
           grep -q 'Isolate.run' lib/screens/viewer_screen.dart
           grep -q 'ZipDecoder().decodeBytes' lib/screens/viewer_screen.dart
+          grep -q 'File(item.path).rename' lib/screens/home_screen.dart
+          grep -q 'File(item.path).copy' lib/screens/home_screen.dart
+          grep -q 'await file.delete' lib/screens/home_screen.dart
+          grep -q 'ThemeMode.light' lib/main.dart
+          ! grep -q 'darkTheme:' lib/main.dart
           ! grep -A10 'item.kind == DocumentKind.excel' lib/screens/viewer_screen.dart | grep 'DocViewerView'
 
       - name: Build ARM64 Release
         working-directory: docviewer_build
         run: flutter build apk --release --target-platform android-arm64 --split-per-abi --obfuscate --split-debug-info=build/symbols
 
-      - name: Package and verify same application ID
+      - name: Package and verify application ID
         working-directory: docviewer_build
         run: |
           set -euo pipefail
           INPUT=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-          ALIGNED=build/app/outputs/flutter-apk/v26-stable-package-aligned.apk
-          FINAL=build/app/outputs/flutter-apk/Mustanadati-v2.6.0-StablePackage-ARM64.apk
+          ALIGNED=build/app/outputs/flutter-apk/v27-aligned.apk
+          FINAL=build/app/outputs/flutter-apk/Mustanadati-v2.7.0-LightFileManager-ARM64.apk
           PASS="$(openssl rand -hex 24)"
           echo "::add-mask::$PASS"
-          KS=/tmp/mustanadati-v26-temporary.jks
+          KS=/tmp/mustanadati-v27-temporary.jks
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
           ZIPALIGN="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name zipalign | sort -V | tail -1)"
           AAPT="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
@@ -160,8 +172,8 @@ jobs:
           "$APKSIGNER" verify --verbose --print-certs "$FINAL" | tee build/app/outputs/flutter-apk/signing-verification.txt
           "$AAPT" dump badging "$FINAL" | tee build/app/outputs/flutter-apk/badging.txt
           grep -q "package: name='com.mographiccode.mustanadati.app'" build/app/outputs/flutter-apk/badging.txt
-          grep -q "versionName='2.6.0'" build/app/outputs/flutter-apk/badging.txt
-          grep -q "versionCode='2008'" build/app/outputs/flutter-apk/badging.txt
+          grep -q "versionName='2.7.0'" build/app/outputs/flutter-apk/badging.txt
+          grep -q "versionCode='2009'" build/app/outputs/flutter-apk/badging.txt
           grep -q "native-code: 'arm64-v8a'" build/app/outputs/flutter-apk/badging.txt
           unzip -t "$FINAL" >/dev/null
           sha256sum "$FINAL" | tee "$FINAL.sha256"
@@ -174,10 +186,10 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Mustanadati-v2.6.0-StablePackage-ARM64
+          name: Mustanadati-v2.7.0-LightFileManager-ARM64
           path: |
-            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.6.0-StablePackage-ARM64.apk
-            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.6.0-StablePackage-ARM64.apk.sha256
+            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.7.0-LightFileManager-ARM64.apk
+            docviewer_build/build/app/outputs/flutter-apk/Mustanadati-v2.7.0-LightFileManager-ARM64.apk.sha256
             docviewer_build/build/app/outputs/flutter-apk/signing-verification.txt
             docviewer_build/build/app/outputs/flutter-apk/badging.txt
             docviewer_build/build/signing-tools/apksigner
