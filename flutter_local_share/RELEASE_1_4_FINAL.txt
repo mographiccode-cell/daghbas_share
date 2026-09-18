@@ -1,0 +1,3 @@
+LocalShare 1.4.0 final packaging trigger.
+Windows installer includes file paste support.
+Android build includes file sharing support.
