@@ -1,0 +1,72 @@
+name: Adhwa Deepfake PR APK
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    if: github.head_ref == 'adhwa-deepfake-flutter'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Reconstruct Flutter project
+        run: |
+          set -euo pipefail
+          base64 -d adhwa_deepfake_payload/payload.b64 > /tmp/adhwa_payload.tar.gz
+          echo "44b6a05539477418be990ef547e1643b9f7f1cf65bd24d34c6ccb56398cb1a59  /tmp/adhwa_payload.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/adhwa_payload.tar.gz
+      - name: Bootstrap Android platform
+        working-directory: adhwa_deepfake_app
+        run: |
+          set -euo pipefail
+          cp pubspec.yaml /tmp/adhwa_pubspec.yaml
+          cp lib/main.dart /tmp/adhwa_main.dart
+          flutter create --platforms=android --org com.adhwa --project-name deepfake_guard .
+          cp /tmp/adhwa_pubspec.yaml pubspec.yaml
+          cp /tmp/adhwa_main.dart lib/main.dart
+          python3 ci/patch_android.py
+      - name: Download and verify AASIST ONNX
+        working-directory: adhwa_deepfake_app
+        run: |
+          set -euo pipefail
+          mkdir -p assets/models
+          curl -L --fail --retry 4 --retry-delay 3 -o assets/models/aasist.onnx "https://huggingface.co/SpeechAntiSpoofingBenchmarks/AASIST/resolve/16774d458d86d2a021ae31646c1bf66a5331b53e/aasist.onnx?download=true"
+          echo "130e536266b7c537f9a13029e1612a9f392fd1cc827783683b6d1c062a3db5e1  assets/models/aasist.onnx" | sha256sum -c -
+      - name: Resolve and inspect
+        working-directory: adhwa_deepfake_app
+        run: |
+          flutter pub get
+          flutter analyze
+      - name: Build release APK
+        working-directory: adhwa_deepfake_app
+        run: |
+          set -euo pipefail
+          flutter build apk --release
+          cp build/app/outputs/flutter-apk/app-release.apk ../Adhwa_Ahmed_Deepfake_Voice_Detection_APK.apk
+          sha256sum ../Adhwa_Ahmed_Deepfake_Voice_Detection_APK.apk > ../Adhwa_Ahmed_Deepfake_Voice_Detection_APK.apk.sha256
+      - name: Package source
+        run: |
+          set -euo pipefail
+          rm -rf adhwa_deepfake_app/.dart_tool adhwa_deepfake_app/build
+          zip -qr Adhwa_Ahmed_Deepfake_Voice_Detection_Source.zip adhwa_deepfake_app
+          sha256sum Adhwa_Ahmed_Deepfake_Voice_Detection_Source.zip > Adhwa_Ahmed_Deepfake_Voice_Detection_Source.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Adhwa-Ahmed-Deepfake-Voice-Detection
+          path: |
+            Adhwa_Ahmed_Deepfake_Voice_Detection_APK.apk
+            Adhwa_Ahmed_Deepfake_Voice_Detection_APK.apk.sha256
+            Adhwa_Ahmed_Deepfake_Voice_Detection_Source.zip
+            Adhwa_Ahmed_Deepfake_Voice_Detection_Source.zip.sha256
+          if-no-files-found: error
+          retention-days: 7
