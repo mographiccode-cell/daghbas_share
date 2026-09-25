@@ -109,7 +109,6 @@ def risk_score(findings: list[dict], llm_result: dict | None = None) -> int:
     if not findings and not llm_result:
         return 0
     weights = sorted([max(0, min(100, int(f.get('weight', 0)))) for f in findings], reverse=True)
-    # Highest signal dominates; additional independent findings raise confidence without simple over-summing.
     score = 0.0
     for weight in weights:
         score = 100 - ((100 - score) * (100 - weight) / 100)
@@ -136,6 +135,22 @@ def decision_for(score: int, approval_threshold: int, block_threshold: int) -> s
     if score >= approval_threshold:
         return 'approval'
     return 'allow'
+
+
+_SECRET_REDACTIONS = (
+    (re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}"), "[REDACTED_GITHUB_TOKEN]"),
+    (re.compile(r"(?:AKIA|ASIA)[A-Z0-9]{16}"), "[REDACTED_AWS_KEY]"),
+    (re.compile(r"-----BEGIN\s+(?:RSA|OPENSSH|EC|DSA)?\s*PRIVATE KEY-----[\s\S]*?-----END\s+(?:RSA|OPENSSH|EC|DSA)?\s*PRIVATE KEY-----", re.I), "[REDACTED_PRIVATE_KEY]"),
+    (re.compile(r"(?im)^([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY)[A-Z0-9_]*\s*[=:]\s*)(.+)$"), r"\1[REDACTED]"),
+)
+
+
+def sanitize_for_storage(text: str, limit: int = 50000) -> str:
+    """Redact common secret material before persisting prompt/tool content."""
+    value = (text or '')[:limit]
+    for pattern, replacement in _SECRET_REDACTIONS:
+        value = pattern.sub(replacement, value)
+    return value
 
 
 def findings_json(findings: list[dict]) -> str:
