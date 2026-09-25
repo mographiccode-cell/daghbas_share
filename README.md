@@ -11,7 +11,7 @@ A bilingual (English/Arabic) web security platform that extends the ideas of **A
 - Risk scoring and `allow / block / approval` decisions.
 - Human approval inbox for sensitive actions.
 - Audit logging, dashboard metrics, and user-scoped CSV security report export.
-- Codex lifecycle hook bridge for `UserPromptSubmit` and `PreToolUse`.
+- Codex lifecycle hook bridge for `UserPromptSubmit`, `PreToolUse`, and `PostToolUse` so both requested actions and returned untrusted content can be evaluated.
 - React + Vite web dashboard with complete English/Arabic switching and RTL support.
 - SQLite now, with SQLAlchemy models kept portable for later PostgreSQL migration.
 - Optional compatibility adapter for the original `@estelwalks/agent-threat-scanner` v0.2.0.
@@ -96,7 +96,7 @@ cd backend
 PYTHONPATH=. pytest -q
 ```
 
-The included tests cover authentication, prompt-injection blocking, sensitive-file approval behavior, user-data isolation, Codex hook authentication, policy thresholds, and report export. See `TEST_REPORT.md` for the verified results.
+The test suite includes 15 requirement-mapped tests (`FR01`–`FR15`) plus regression tests covering authentication, prompt/tool/output scanning, approvals, tenant isolation, policies, audit logs, secret redaction, filtering, and report export. See `TEST_REPORT.md` for verified results.
 
 ## Upstream scanner
 
