@@ -1,0 +1,1 @@
+Trigger deterministic PFX Authenticode signing build.
