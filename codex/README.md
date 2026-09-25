@@ -32,7 +32,8 @@ $env:AGENT_GUARD_APPROVAL_TIMEOUT="120"
 $env:AGENT_GUARD_FAIL_CLOSED="true"
 ```
 
-4. Copy `agent_guard_hook.py` to your project at `.codex/hooks/agent_guard_hook.py`.
-5. Merge `hooks.json` into a Codex hook configuration that your environment trusts.
+4. Create `<your-project>/.codex/hooks/`, then copy `agent_guard_hook.py` there.
+5. Copy this `hooks.json` to `<your-project>/.codex/hooks.json`.
+6. Start Codex from the project root and review/trust the project hooks when Codex asks. You can inspect hook sources with `/hooks` in Codex CLI.
 
 > Codex lifecycle hooks are a guardrail for supported local function-tool paths. Hosted tools such as Codex built-in WebSearch are not currently covered by PreToolUse/PostToolUse; for web content that must be enforced, route retrieval through a local/MCP tool or scan the content through the Security Guard API.
