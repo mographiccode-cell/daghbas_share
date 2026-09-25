@@ -6,6 +6,7 @@ This folder contains a local Codex lifecycle hook bridge.
 
 - `UserPromptSubmit`: sends the outgoing user prompt to the Security Guard API before Codex continues.
 - `PreToolUse`: sends supported local tool calls (Bash, `apply_patch`, MCP tools, and other local function tools) to the Security Guard API before execution.
+- `PostToolUse`: inspects returned tool output, including content read from files or MCP tools, before Codex consumes that output. This protects against indirect prompt injection inside untrusted content.
 
 For `approval` decisions, the hook waits for a decision from the web dashboard. Approval timeout defaults to 120 seconds.
 
@@ -34,4 +35,4 @@ $env:AGENT_GUARD_FAIL_CLOSED="true"
 4. Copy `agent_guard_hook.py` to your project at `.codex/hooks/agent_guard_hook.py`.
 5. Merge `hooks.json` into a Codex hook configuration that your environment trusts.
 
-> Codex lifecycle hooks are a guardrail for supported local function-tool paths. They are not a complete security boundary for every possible hosted or specialized tool path.
+> Codex lifecycle hooks are a guardrail for supported local function-tool paths. Hosted tools such as Codex built-in WebSearch are not currently covered by PreToolUse/PostToolUse; for web content that must be enforced, route retrieval through a local/MCP tool or scan the content through the Security Guard API.
