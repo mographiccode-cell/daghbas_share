@@ -12,8 +12,8 @@ from .database import Base, engine
 from .deps import get_current_user, get_db, get_integration_user
 from .llm_analyzer import analyze_with_ollama
 from .models import ApprovalRequest, AuditLog, SecurityPolicy, SecurityScan, User
-from .schemas import CodexPromptIn, CodexToolIn, LoginIn, PolicyIn, ScanIn, SignupIn
-from .security_engine import ALL_CATEGORIES, decision_for, findings_json, merge_findings, risk_score, static_analyze, threat_level
+from .schemas import CodexPostToolIn, CodexPromptIn, CodexToolIn, LoginIn, PolicyIn, ScanIn, SignupIn
+from .security_engine import ALL_CATEGORIES, decision_for, findings_json, merge_findings, risk_score, sanitize_for_storage, static_analyze, threat_level
 
 Base.metadata.create_all(bind=engine)
 
@@ -58,7 +58,7 @@ async def run_scan(db: Session, user: User, payload: ScanIn) -> tuple[SecuritySc
     scan = SecurityScan(
         user_id=user.id,
         source_type=payload.source_type,
-        source_text=payload.source_text,
+        source_text=sanitize_for_storage(payload.source_text),
         tool_name=payload.tool_name,
         session_id=payload.session_id,
         decision=decision,
@@ -138,8 +138,15 @@ async def create_scan(payload: ScanIn, db: Session = Depends(get_db), user: User
 
 
 @app.get('/api/scans')
-def list_scans(limit: int = 100, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    rows = db.query(SecurityScan).filter(SecurityScan.user_id == user.id).order_by(SecurityScan.id.desc()).limit(min(limit, 500)).all()
+def list_scans(limit: int = 100, decision: str | None = None, threat_level_filter: str | None = None, source_type: str | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    q = db.query(SecurityScan).filter(SecurityScan.user_id == user.id)
+    if decision:
+        q = q.filter(SecurityScan.decision == decision)
+    if threat_level_filter:
+        q = q.filter(SecurityScan.threat_level == threat_level_filter)
+    if source_type:
+        q = q.filter(SecurityScan.source_type == source_type)
+    rows = q.order_by(SecurityScan.id.desc()).limit(min(limit, 500)).all()
     return [scan_dict(x) for x in rows]
 
 
@@ -229,8 +236,11 @@ def reject(approval_id: int, db: Session = Depends(get_db), user: User = Depends
 
 
 @app.get('/api/audit')
-def audit_logs(limit: int = 200, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    rows = db.query(AuditLog).filter(AuditLog.user_id == user.id).order_by(AuditLog.id.desc()).limit(min(limit, 1000)).all()
+def audit_logs(limit: int = 200, event_type: str | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    q = db.query(AuditLog).filter(AuditLog.user_id == user.id)
+    if event_type:
+        q = q.filter(AuditLog.event_type == event_type)
+    rows = q.order_by(AuditLog.id.desc()).limit(min(limit, 1000)).all()
     return [{'id': x.id, 'event_type': x.event_type, 'details': json.loads(x.details_json), 'created_at': x.created_at} for x in rows]
 
 
@@ -271,6 +281,17 @@ async def codex_prompt(payload: CodexPromptIn, db: Session = Depends(get_db), us
 async def codex_pre_tool(payload: CodexToolIn, db: Session = Depends(get_db), user: User = Depends(get_integration_user)):
     rendered = json.dumps({'tool_name': payload.tool_name, 'tool_input': payload.tool_input}, ensure_ascii=False, default=str)
     scan, approval = await run_scan(db, user, ScanIn(source_type='codex_tool', source_text=rendered, tool_name=payload.tool_name, session_id=payload.session_id))
+    return {'decision': scan.decision, 'reason': _reason(scan), 'risk_score': scan.risk_score, 'approval_id': approval.id if approval else None, 'scan_id': scan.id}
+
+
+@app.post('/api/integrations/codex/post-tool')
+async def codex_post_tool(payload: CodexPostToolIn, db: Session = Depends(get_db), user: User = Depends(get_integration_user)):
+    rendered = json.dumps({
+        'tool_name': payload.tool_name,
+        'tool_input': payload.tool_input,
+        'tool_response': payload.tool_response,
+    }, ensure_ascii=False, default=str)
+    scan, approval = await run_scan(db, user, ScanIn(source_type='codex_tool_response', source_text=rendered, tool_name=payload.tool_name, session_id=payload.session_id))
     return {'decision': scan.decision, 'reason': _reason(scan), 'risk_score': scan.risk_score, 'approval_id': approval.id if approval else None, 'scan_id': scan.id}
 
 
