@@ -153,5 +153,15 @@ def sanitize_for_storage(text: str, limit: int = 50000) -> str:
     return value
 
 
+def _sanitize_nested(value):
+    if isinstance(value, str):
+        return sanitize_for_storage(value, limit=10000)
+    if isinstance(value, list):
+        return [_sanitize_nested(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _sanitize_nested(v) for k, v in value.items()}
+    return value
+
+
 def findings_json(findings: list[dict]) -> str:
-    return json.dumps(findings, ensure_ascii=False)
+    return json.dumps(_sanitize_nested(findings), ensure_ascii=False)
