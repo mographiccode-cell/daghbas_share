@@ -56,7 +56,7 @@ The complete Rules + LLM control flow was verified by injecting a controlled moc
 
 ## Secret hygiene
 
-- Raw GitHub/AWS/private-key style secrets are redacted before scan text is persisted.
+- Raw GitHub/AWS/private-key style secrets are redacted from both stored scan text and stored finding evidence before persistence.
 - Runtime SQLite databases are ignored.
 - `.env` is ignored; only `.env.example` is published.
 - Codex integration tokens are stored as SHA-256 digests only.
