@@ -109,6 +109,7 @@ def risk_score(findings: list[dict], llm_result: dict | None = None) -> int:
     if not findings and not llm_result:
         return 0
     weights = sorted([max(0, min(100, int(f.get('weight', 0)))) for f in findings], reverse=True)
+    # Highest signal dominates; additional independent findings raise confidence without simple over-summing.
     score = 0.0
     for weight in weights:
         score = 100 - ((100 - score) * (100 - weight) / 100)
@@ -140,7 +141,9 @@ def decision_for(score: int, approval_threshold: int, block_threshold: int) -> s
 def findings_json(findings: list[dict]) -> str:
     return json.dumps(findings, ensure_ascii=False)
 
-
+# Persistence-safe redaction patterns. These are intentionally broader than the
+# detection rules because anything stored in SQLite should avoid retaining raw
+# credentials even when a security rule was disabled by the user.
 _REDACTIONS = (
     (re.compile(r'-----BEGIN\s+(?:RSA|OPENSSH|EC|DSA)?\s*PRIVATE KEY-----.*?-----END\s+(?:RSA|OPENSSH|EC|DSA)?\s*PRIVATE KEY-----', re.I | re.S), '[REDACTED_PRIVATE_KEY]'),
     (re.compile(r'\bgh[pousr]_[A-Za-z0-9_]{20,}\b'), '[REDACTED_GITHUB_TOKEN]'),

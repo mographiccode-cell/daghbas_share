@@ -27,7 +27,10 @@ def request_json(path, method='GET', payload=None):
         BASE_URL + path,
         data=data,
         method=method,
-        headers={'Content-Type': 'application/json', 'X-Agent-Guard-Token': TOKEN},
+        headers={
+            'Content-Type': 'application/json',
+            'X-Agent-Guard-Token': TOKEN,
+        },
     )
     with urllib.request.urlopen(req, timeout=10) as res:
         return json.loads(res.read().decode('utf-8'))
@@ -42,18 +45,37 @@ def block_prompt(reason):
 
 
 def block_pre_tool(reason):
-    emit({'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'permissionDecision': 'deny', 'permissionDecisionReason': reason}})
+    emit({
+        'hookSpecificOutput': {
+            'hookEventName': 'PreToolUse',
+            'permissionDecision': 'deny',
+            'permissionDecisionReason': reason,
+        }
+    })
 
 
 def allow_pre_tool(context=None):
-    out = {'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'permissionDecision': 'allow'}}
+    out = {
+        'hookSpecificOutput': {
+            'hookEventName': 'PreToolUse',
+            'permissionDecision': 'allow',
+        }
+    }
     if context:
         out['hookSpecificOutput']['additionalContext'] = context
     emit(out)
 
 
 def block_post_tool(reason):
-    emit({'decision': 'block', 'reason': reason, 'hookSpecificOutput': {'hookEventName': 'PostToolUse'}})
+    # PostToolUse cannot undo the tool's side effects, but a blocking result
+    # prevents the unsafe output from reaching the continuing Codex workflow.
+    emit({
+        'decision': 'block',
+        'reason': reason,
+        'hookSpecificOutput': {
+            'hookEventName': 'PostToolUse',
+        },
+    })
 
 
 def wait_for_approval(approval_id):
@@ -82,6 +104,7 @@ def main():
         event = json.load(sys.stdin)
     except Exception:
         event = {}
+
     hook_name = event.get('hook_event_name')
     if not TOKEN:
         if FAIL_CLOSED:
@@ -93,36 +116,62 @@ def main():
             else:
                 block_pre_tool(reason)
         return
+
     try:
-        common = {'session_id': event.get('session_id'), 'turn_id': event.get('turn_id'), 'model': event.get('model'), 'cwd': event.get('cwd')}
+        common = {
+            'session_id': event.get('session_id'),
+            'turn_id': event.get('turn_id'),
+            'model': event.get('model'),
+            'cwd': event.get('cwd'),
+        }
+
         if hook_name == 'UserPromptSubmit':
-            result = request_json('/api/integrations/codex/prompt', 'POST', {**common, 'prompt': event.get('prompt', '')})
+            result = request_json('/api/integrations/codex/prompt', 'POST', {
+                **common,
+                'prompt': event.get('prompt', ''),
+            })
             if result.get('decision') == 'block':
                 block_prompt(result.get('reason', 'Prompt blocked by security policy.'))
             elif result.get('decision') == 'approval':
-                if wait_for_approval(result.get('approval_id')) != 'approved':
+                status = wait_for_approval(result.get('approval_id'))
+                if status != 'approved':
                     block_prompt('Prompt was not approved in the security dashboard.')
             return
+
         if hook_name == 'PreToolUse':
-            result = request_json('/api/integrations/codex/pre-tool', 'POST', {**common, 'tool_name': event.get('tool_name', ''), 'tool_input': event.get('tool_input')})
-            decision = result.get('decision'); reason = result.get('reason', 'Blocked by security policy.')
+            result = request_json('/api/integrations/codex/pre-tool', 'POST', {
+                **common,
+                'tool_name': event.get('tool_name', ''),
+                'tool_input': event.get('tool_input'),
+            })
+            decision = result.get('decision')
+            reason = result.get('reason', 'Blocked by security policy.')
             if decision == 'block':
                 block_pre_tool(reason)
             elif decision == 'approval':
-                if wait_for_approval(result.get('approval_id')) == 'approved':
+                status = wait_for_approval(result.get('approval_id'))
+                if status == 'approved':
                     allow_pre_tool('Approved by AI Agent Security Guard dashboard.')
                 else:
                     block_pre_tool('Action rejected or approval timed out in AI Agent Security Guard.')
             else:
                 allow_pre_tool()
             return
+
         if hook_name == 'PostToolUse':
-            result = request_json('/api/integrations/codex/post-tool', 'POST', {**common, 'tool_name': event.get('tool_name', ''), 'tool_input': event.get('tool_input'), 'tool_response': event.get('tool_response')})
-            decision = result.get('decision'); reason = result.get('reason', 'Tool output blocked by security policy.')
+            result = request_json('/api/integrations/codex/post-tool', 'POST', {
+                **common,
+                'tool_name': event.get('tool_name', ''),
+                'tool_input': event.get('tool_input'),
+                'tool_response': event.get('tool_response'),
+            })
+            decision = result.get('decision')
+            reason = result.get('reason', 'Tool output blocked by security policy.')
             if decision == 'block':
                 block_post_tool(reason)
             elif decision == 'approval':
-                if wait_for_approval(result.get('approval_id')) != 'approved':
+                status = wait_for_approval(result.get('approval_id'))
+                if status != 'approved':
                     block_post_tool('Tool output rejected or approval timed out in AI Agent Security Guard.')
             return
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError):

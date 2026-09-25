@@ -36,6 +36,7 @@ def main():
     CODEX_DIR.mkdir(parents=True, exist_ok=True)
     HOOK_DIR.mkdir(parents=True, exist_ok=True)
     shutil.copy2(SOURCE_HOOK, DEST_HOOK)
+
     if CONFIG.exists():
         backup = CONFIG.with_name(f'hooks.json.bak-{datetime.now().strftime("%Y%m%d-%H%M%S")}')
         shutil.copy2(CONFIG, backup)
@@ -46,9 +47,11 @@ def main():
     else:
         backup = None
         config = {'description': 'Codex lifecycle hooks', 'hooks': {}}
+
     hooks = config.setdefault('hooks', {})
     for event in ('UserPromptSubmit', 'PreToolUse', 'PostToolUse'):
         groups = hooks.setdefault(event, [])
+        # Remove previous Agent Guard command entries while preserving unrelated hooks.
         cleaned = []
         for group in groups:
             handlers = group.get('hooks', []) if isinstance(group, dict) else []
@@ -57,6 +60,7 @@ def main():
             cleaned.append(group)
         cleaned.append(handler(event))
         hooks[event] = cleaned
+
     CONFIG.write_text(json.dumps(config, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     print(f'Installed hook: {DEST_HOOK}')
     print(f'Updated config: {CONFIG}')

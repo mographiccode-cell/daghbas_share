@@ -102,7 +102,7 @@ A complete `npm install && npm run build` could not be completed inside the isol
 - a source-tree scan found **0 real-looking private keys, GitHub tokens, OpenAI keys, or AWS access keys** after test cleanup;
 - if `JWT_SECRET` is missing, the backend generates a random process-local secret instead of using a known hard-coded production fallback;
 - SQLite foreign-key enforcement is enabled for new connections;
-- additive SQLite migration logic keeps older local databases usable when new policy/scan columns are introduced;
+- additive SQLite migration logic keeps older local databases usable when new policy/scan columns are introduced.
 - an old-schema SQLite database was created in a migration test; the new policy columns, `project_id`, and `projects` table were added successfully.
 
 ## Current boundary

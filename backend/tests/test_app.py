@@ -99,11 +99,10 @@ def test_policy_update_changes_decision_boundary():
     assert r.status_code == 200
     assert r.json()['decision'] == 'approval'
 
-
 def test_report_export_is_user_scoped():
     token = signup('report@example.com', 'Report')
     client.post('/api/scans', json={'source_type': 'prompt', 'source_text': 'hello safe world'}, headers=auth(token))
     r = client.get('/api/reports/security.csv', headers=auth(token))
     assert r.status_code == 200
-    assert 'scan_id,created_at,source_type' in r.text
+    assert 'scan_id,project_id,created_at,source_type' in r.text
     assert 'prompt' in r.text

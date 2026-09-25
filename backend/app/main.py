@@ -96,6 +96,7 @@ def _json_list(raw: str | None) -> list[str]:
 
 
 def _safe_details(details: dict[str, Any]) -> dict[str, Any]:
+    # Redact recursively by serializing first, then parsing the sanitized JSON.
     raw = json.dumps(details, ensure_ascii=False, default=str)
     redacted = redact_sensitive(raw)
     try:
@@ -314,6 +315,7 @@ def get_project(project_id: int, db: Session = Depends(get_db), user: User = Dep
 @app.delete('/api/projects/{project_id}')
 def delete_project(project_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     project = ensure_project_owned(db, user.id, project_id)
+    # Preserve scan history but detach it from the deleted project.
     db.query(SecurityScan).filter(SecurityScan.user_id == user.id, SecurityScan.project_id == project.id).update({'project_id': None})
     db.delete(project)
     db.commit()
@@ -364,7 +366,8 @@ def dashboard(project_id: int | None = None, db: Session = Depends(get_db), user
         ensure_project_owned(db, user.id, project_id)
         query = query.filter(SecurityScan.project_id == project_id)
     scans = query.all()
-    pending = db.query(ApprovalRequest).filter(ApprovalRequest.user_id == user.id, ApprovalRequest.status == 'pending').count()
+    pending_query = db.query(ApprovalRequest).filter(ApprovalRequest.user_id == user.id, ApprovalRequest.status == 'pending')
+    pending = pending_query.count()
     return {
         'total_scans': len(scans),
         'blocked': sum(1 for x in scans if x.decision == 'block'),
@@ -485,9 +488,16 @@ def security_report_csv(project_id: int | None = None, db: Session = Depends(get
     for scan in rows:
         findings = json.loads(scan.findings_json or '[]')
         writer.writerow([
-            scan.id, scan.project_id or '', scan.created_at.isoformat() if scan.created_at else '',
-            scan.source_type, scan.tool_name or '', scan.decision, scan.risk_score,
-            scan.threat_level, scan.llm_used, '|'.join(str(f.get('id', '')) for f in findings),
+            scan.id,
+            scan.project_id or '',
+            scan.created_at.isoformat() if scan.created_at else '',
+            scan.source_type,
+            scan.tool_name or '',
+            scan.decision,
+            scan.risk_score,
+            scan.threat_level,
+            scan.llm_used,
+            '|'.join(str(f.get('id', '')) for f in findings),
         ])
     audit(db, user.id, 'report.exported', {'format': 'csv', 'rows': len(rows), 'project_id': project_id})
     return Response(content=buffer.getvalue(), media_type='text/csv; charset=utf-8', headers={'Content-Disposition': 'attachment; filename=ai-agent-security-report.csv'})
@@ -519,14 +529,28 @@ async def codex_prompt(payload: CodexPromptIn, db: Session = Depends(get_db), us
 @app.post('/api/integrations/codex/pre-tool')
 async def codex_pre_tool(payload: CodexToolIn, db: Session = Depends(get_db), user: User = Depends(get_integration_user)):
     rendered = json.dumps({'tool_name': payload.tool_name, 'tool_input': payload.tool_input}, ensure_ascii=False, default=str)
-    scan, approval = await run_scan(db, user, ScanIn(source_type='codex_tool', source_text=rendered, tool_name=payload.tool_name, session_id=payload.session_id))
+    scan, approval = await run_scan(db, user, ScanIn(
+        source_type='codex_tool',
+        source_text=rendered,
+        tool_name=payload.tool_name,
+        session_id=payload.session_id,
+    ))
     return _codex_result(scan, approval)
 
 
 @app.post('/api/integrations/codex/post-tool')
 async def codex_post_tool(payload: CodexToolResultIn, db: Session = Depends(get_db), user: User = Depends(get_integration_user)):
-    rendered = json.dumps({'tool_name': payload.tool_name, 'tool_input': payload.tool_input, 'tool_response': payload.tool_response}, ensure_ascii=False, default=str)
-    scan, approval = await run_scan(db, user, ScanIn(source_type='codex_tool_response', source_text=rendered, tool_name=payload.tool_name, session_id=payload.session_id))
+    rendered = json.dumps({
+        'tool_name': payload.tool_name,
+        'tool_input': payload.tool_input,
+        'tool_response': payload.tool_response,
+    }, ensure_ascii=False, default=str)
+    scan, approval = await run_scan(db, user, ScanIn(
+        source_type='codex_tool_response',
+        source_text=rendered,
+        tool_name=payload.tool_name,
+        session_id=payload.session_id,
+    ))
     return _codex_result(scan, approval)
 
 
@@ -569,6 +593,7 @@ async def websocket_events(websocket: WebSocket, token: str):
         await ws_manager.connect(user_id, websocket)
         await websocket.send_json({'type': 'connected'})
         while True:
+            # The dashboard may send ping text; receiving also detects disconnects.
             await websocket.receive_text()
     except WebSocketDisconnect:
         pass
