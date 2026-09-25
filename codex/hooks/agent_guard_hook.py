@@ -48,15 +48,20 @@ def block_tool(reason):
 
 
 def allow_tool(context=None):
-    out = {
+    # No output means this security hook allows processing to continue.
+    # Codex can still apply its normal permission policy afterward.
+    return
+
+
+def block_post_tool(reason):
+    print(json.dumps({
+        'decision': 'block',
+        'reason': reason,
         'hookSpecificOutput': {
-            'hookEventName': 'PreToolUse',
-            'permissionDecision': 'allow',
+            'hookEventName': 'PostToolUse',
+            'additionalContext': 'Untrusted tool output was withheld by AI Agent Security Guard.'
         }
-    }
-    if context:
-        out['hookSpecificOutput']['additionalContext'] = context
-    print(json.dumps(out, ensure_ascii=False))
+    }, ensure_ascii=False))
 
 
 def wait_for_approval(approval_id):
@@ -80,7 +85,12 @@ def main():
     if not TOKEN:
         reason = 'AI Agent Security Guard token is not configured.'
         if FAIL_CLOSED:
-            block_prompt(reason) if hook_name == 'UserPromptSubmit' else block_tool(reason)
+            if hook_name == 'UserPromptSubmit':
+                block_prompt(reason)
+            elif hook_name == 'PostToolUse':
+                block_post_tool(reason)
+            else:
+                block_tool(reason)
         return
 
     try:
@@ -117,18 +127,40 @@ def main():
                 block_tool(reason)
             elif decision == 'approval':
                 status = wait_for_approval(result.get('approval_id'))
-                if status == 'approved':
-                    allow_tool('Approved by AI Agent Security Guard dashboard.')
-                else:
+                if status != 'approved':
                     block_tool('Action rejected or approval timed out in AI Agent Security Guard.')
             else:
                 allow_tool()
+
+        elif hook_name == 'PostToolUse':
+            result = request_json('/api/integrations/codex/post-tool', 'POST', {
+                'session_id': event.get('session_id'),
+                'turn_id': event.get('turn_id'),
+                'tool_name': event.get('tool_name', ''),
+                'tool_input': event.get('tool_input'),
+                'tool_response': event.get('tool_response'),
+                'model': event.get('model'),
+                'cwd': event.get('cwd'),
+            })
+            decision = result.get('decision')
+            reason = result.get('reason', 'Untrusted tool output blocked by security policy.')
+            if decision == 'block':
+                block_post_tool(reason)
+            elif decision == 'approval':
+                status = wait_for_approval(result.get('approval_id'))
+                if status != 'approved':
+                    block_post_tool('Tool output was rejected or approval timed out in AI Agent Security Guard.')
         else:
             return
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as exc:
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError):
         if FAIL_CLOSED:
             reason = 'Security service unavailable; action blocked by fail-closed policy.'
-            block_prompt(reason) if hook_name == 'UserPromptSubmit' else block_tool(reason)
+            if hook_name == 'UserPromptSubmit':
+                block_prompt(reason)
+            elif hook_name == 'PostToolUse':
+                block_post_tool(reason)
+            else:
+                block_tool(reason)
         else:
             return
 
