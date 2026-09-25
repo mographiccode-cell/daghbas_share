@@ -1,74 +1,107 @@
-# daghbas_share
+# AI Agent Security Guard
 
-منتج داخلي لإدارة الملفات والمهام داخل الشركة (FastAPI + PyQt6) مع دعم عربي (RTL) ونظام تفعيل يربط التثبيت بالجهاز.
+A bilingual (English/Arabic) web security platform that extends the ideas of **Agent Threat Scanner** into a multi-user runtime protection workflow for AI agents and Codex.
 
-## المزايا الحالية
+## Core capabilities
 
-- واجهة ويب عربية/إنجليزية سهلة من أي جهاز على الشبكة: `/ui`.
-- دعم الثيمات: Light / Dark.
-- لوحة Admin داخل الواجهة للتحكم الكامل بالملفات (قفل/فك/نقل/حذف).
-- عميل سطح مكتب PyQt6 مع رسائل أخطاء دقيقة وتسجيل أخطاء محلي.
-- نظام تفعيل أجهزة Device-Bound.
-- حفظ التعديلات على الملفات يتم **في نفس الملف ونفس المجلد** (In-Place Save) بدون نقل/نسخ عند التعديل.
+- Account creation and secure sign-in.
+- Strict per-user data isolation for scans, policies, approvals, logs, and integration tokens.
+- Static security rules for prompt injection, secret access, sensitive files, data exfiltration, remote execution, command injection, destructive actions, obfuscation, privilege escalation, persistence, and network abuse.
+- Optional local LLM semantic review through **Ollama**.
+- Risk scoring and `allow / block / approval` decisions.
+- Human approval inbox for sensitive actions.
+- Audit logging, dashboard metrics, and user-scoped CSV security report export.
+- Codex lifecycle hook bridge for `UserPromptSubmit` and `PreToolUse`.
+- React + Vite web dashboard with complete English/Arabic switching and RTL support.
+- SQLite now, with SQLAlchemy models kept portable for later PostgreSQL migration.
+- Optional compatibility adapter for the original `@estelwalks/agent-threat-scanner` v0.2.0.
 
-## تشغيل سريع (3 خطوات)
+## Architecture
 
-1. إعداد البيئة:
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
+```text
+Codex / VS Code
+      |
+      v
+Codex lifecycle hooks
+      |
+      v
+FastAPI Security API ------------------- React/Vite Dashboard
+      |                                        |
+      |                                        +-- Approve / Reject
+      v
+Rules Engine + optional Ollama LLM
+      |
+      +-- Allow
+      +-- Block
+      +-- Require Approval
+      |
+      v
+SQLite: users / scans / policies / approvals / audit logs
 ```
 
-2. تشغيل السيرفر على الشبكة:
-```bash
-./scripts/run_server.sh
-```
+## Security design
 
-3. افتح من أي جهاز داخل الشبكة:
-- API: `http://SERVER_IP:8000`
-- واجهة الويب: `http://SERVER_IP:8000/ui`
+- Passwords are hashed with Argon2.
+- Browser sessions use signed JWT access tokens.
+- Codex uses a separate random integration token; only its SHA-256 digest is stored in SQLite.
+- Every user-owned query includes `user_id` filtering.
+- `.env`, SQLite DB files, private keys, node modules, local reports, and test DBs are excluded by `.gitignore`.
+- LLM analysis is optional and defaults to a local Ollama endpoint, so prompts do not need to leave the machine.
+- Codex hook mode defaults to fail-closed if the security API is unavailable.
 
-## تشغيل عميل سطح المكتب
+## Quick start on Windows
 
-```bash
-python -m desktop_client.main
-```
+### 1. Backend
 
-> سجل أخطاء العميل يُكتب تلقائيًا في: `~/daghbas_share_client.log`
-
-## بناء ملف تنفيذي للعميل
-
-- Windows:
 ```powershell
-./scripts/build_client_exe.ps1
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+$env:JWT_SECRET="replace-with-a-long-random-secret-value"
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
-- Linux:
+
+API docs: `http://127.0.0.1:8000/docs`
+
+### 2. Frontend
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open: `http://127.0.0.1:5173`
+
+### 3. Optional local LLM
+
+Install Ollama and pull a local model, then enable:
+
+```powershell
+$env:OLLAMA_ENABLED="true"
+$env:OLLAMA_MODEL="qwen2.5:3b"
+```
+
+If Ollama is unavailable, the application automatically keeps the deterministic rules result instead of failing the scan.
+
+### 4. Codex integration
+
+Open **Codex Integration** in the dashboard, generate a token, then follow `codex/README.md`.
+
+## Tests
+
 ```bash
-./scripts/build_client_exe.sh
+cd backend
+PYTHONPATH=. pytest -q
 ```
 
-## تفعيل الأجهزة (شركة فقط)
+The included tests cover authentication, prompt-injection blocking, sensitive-file approval behavior, user-data isolation, Codex hook authentication, policy thresholds, and report export. See `TEST_REPORT.md` for the verified results.
 
-- endpoint التفعيل: `POST /installations/activate`
-- endpoint التحقق: `POST /installations/validate`
-- التفعيل يتطلب Header: `X-Master-Key` بقيمة `INSTALLATION_MASTER_KEY` من السيرفر.
+## Upstream scanner
 
-## توثيق شامل
+The `scanner-core/` directory integrates `@estelwalks/agent-threat-scanner` v0.2.0 for deeper artifact scanning. See `THIRD_PARTY_NOTICES.md` for attribution and the upstream MIT license.
 
-- [مخطط النظام الداخلي لإدارة المهام والملفات](docs/arabic_system_blueprint.md)
-- [سياسة الحوكمة والتوزيع والإصدار](docs/product_governance_ar.md)
-- [دليل النشر والتشغيل الكامل](docs/deployment_guide_ar.md)
+## Current scope
 
-## سياسة حفظ الملفات (بدون نقل/نسخ)
-
-- عند تعديل ملف موجود في نفس المجلد بنفس الاسم، السيرفر يحفظ التعديل داخل نفس الملف مباشرة.
-- endpoint للحفظ المباشر: `PUT /files/{file_id}/save`
-- رفع ملف بنفس الاسم في نفس المجلد عبر `/upload` سيُعتبر تحديثًا في نفس المكان (In-Place).
-
-
-## صلاحية الأدمن المطلقة على الملفات
-
-- الأدمن يستطيع: حفظ، نقل، حذف، قفل، فك قفل أي ملف حتى لو كان الملف مقفولًا من مستخدم آخر.
-- endpoints مرتبطة بذلك: `POST /files/{file_id}/move`, `DELETE /files/{file_id}`, `POST /lock/{id}`, `POST /unlock/{id}`, `PUT /files/{file_id}/save`.
+This academic release protects supported Codex lifecycle hook paths and the web/API workflow. OpenAI documents that some hosted or specialized tool paths may not pass through the default local function-tool hook path, so hooks should be treated as a strong guardrail rather than a universal sandbox boundary.

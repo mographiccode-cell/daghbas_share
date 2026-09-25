@@ -1,0 +1,12 @@
+{
+  "name": "agent-guard-upstream-scanner-adapter",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@estelwalks/agent-threat-scanner": "0.2.0"
+  },
+  "scripts": {
+    "scan": "node scan.mjs"
+  }
+}

@@ -1,8 +1,37 @@
-__pycache__/
-*.pyc
+# Secrets
 .env
-daghbas_share.db
-data/storage/
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# SQLite/runtime data
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+backend/tests/*.db
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Node
+node_modules/
 dist/
-build/
-*.spec
+.vite/
+npm-debug.log*
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Reports / local artifacts
+reports/*.json
+coverage/
