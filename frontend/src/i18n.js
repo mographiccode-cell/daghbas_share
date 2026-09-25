@@ -12,7 +12,7 @@ export const translations = {
     pending: 'Pending', approved: 'Approved', rejected: 'Rejected', approve: 'Approve', reject: 'Reject', noApprovals: 'No approval requests.',
     approvalThreshold: 'Approval threshold', blockThreshold: 'Block threshold', llmEnabled: 'Enable local LLM analysis', sensitiveApproval: 'Require approval for sensitive files', categories: 'Enabled categories', save: 'Save policy',
     integrationTitle: 'Connect Codex to this security dashboard', integrationText: 'Generate a local integration token, store it in an environment variable, then install the included Codex hooks.', generateToken: 'Generate / rotate token', tokenWarning: 'This token is shown only now. Store it securely and never commit it to GitHub.', copy: 'Copy', hookConfig: 'Hook setup',
-    logs: 'Events', event: 'Event', details: 'Details', language: 'العربية', loading: 'Loading...', refresh: 'Refresh', error: 'Something went wrong',
+    logs: 'Events', event: 'Event', details: 'Details', filter: 'Filter logs', allEvents: 'All events', language: 'العربية', loading: 'Loading...', refresh: 'Refresh', error: 'Something went wrong',
     allow: 'Allow', block: 'Block', approval: 'Approval', none: 'None', low: 'Low', medium: 'Medium', high: 'High',
     exportReport: 'Export CSV report', accountSecurity: 'Each account is isolated by user_id at every API query.', codexStatus: 'Codex token configured', ollamaStatus: 'Local LLM enabled', yes: 'Yes', no: 'No'
   },
@@ -29,7 +29,7 @@ export const translations = {
     pending: 'معلق', approved: 'مقبول', rejected: 'مرفوض', approve: 'موافقة', reject: 'رفض', noApprovals: 'لا توجد طلبات موافقة.',
     approvalThreshold: 'حد طلب الموافقة', blockThreshold: 'حد الحظر', llmEnabled: 'تفعيل تحليل LLM المحلي', sensitiveApproval: 'طلب موافقة للملفات الحساسة', categories: 'فئات الحماية المفعّلة', save: 'حفظ السياسة',
     integrationTitle: 'ربط Codex بلوحة الحماية', integrationText: 'أنشئ رمز ربط محليًا، خزّنه في متغير بيئة، ثم ثبّت Codex Hooks المرفقة.', generateToken: 'إنشاء / تدوير الرمز', tokenWarning: 'يظهر هذا الرمز الآن فقط. احفظه بأمان ولا ترفعه إلى GitHub.', copy: 'نسخ', hookConfig: 'إعداد Hooks',
-    logs: 'الأحداث', event: 'الحدث', details: 'التفاصيل', language: 'English', loading: 'جارٍ التحميل...', refresh: 'تحديث', error: 'حدث خطأ',
+    logs: 'الأحداث', event: 'الحدث', details: 'التفاصيل', filter: 'فلترة السجلات', allEvents: 'جميع الأحداث', language: 'English', loading: 'جارٍ التحميل...', refresh: 'تحديث', error: 'حدث خطأ',
     allow: 'سماح', block: 'حظر', approval: 'موافقة', none: 'لا يوجد', low: 'منخفض', medium: 'متوسط', high: 'مرتفع',
     exportReport: 'تصدير تقرير CSV', accountSecurity: 'يتم عزل بيانات كل حساب باستخدام user_id في كل استعلام API.', codexStatus: 'رمز Codex مهيأ', ollamaStatus: 'LLM المحلي مفعّل', yes: 'نعم', no: 'لا'
   }
