@@ -44,3 +44,13 @@ class CodexToolIn(BaseModel):
     tool_input: Any = None
     model: str | None = None
     cwd: str | None = None
+
+
+class CodexPostToolIn(BaseModel):
+    session_id: str | None = None
+    turn_id: str | None = None
+    tool_name: str
+    tool_input: Any = None
+    tool_response: Any = None
+    model: str | None = None
+    cwd: str | None = None
