@@ -1,25 +1,14 @@
 import hashlib
 import os
 import secrets
-from pathlib import Path
 from datetime import datetime, timedelta, timezone
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 
-def _jwt_secret() -> str:
-    configured = os.getenv('JWT_SECRET')
-    if configured:
-        return configured
-    secret_file = Path(__file__).resolve().parents[2] / 'data' / '.jwt_secret'
-    secret_file.parent.mkdir(parents=True, exist_ok=True)
-    if secret_file.exists():
-        return secret_file.read_text(encoding='utf-8').strip()
-    generated = secrets.token_urlsafe(48)
-    secret_file.write_text(generated, encoding='utf-8')
-    return generated
-
-JWT_SECRET = _jwt_secret()
+# Production should set JWT_SECRET. For local development, never fall back to a
+# known constant; generate an ephemeral secret for this process instead.
+JWT_SECRET = os.getenv('JWT_SECRET') or secrets.token_urlsafe(48)
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRE_MINUTES = int(os.getenv('JWT_EXPIRE_MINUTES', '1440'))
 _ph = PasswordHasher()

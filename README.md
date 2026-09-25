@@ -1,18 +1,20 @@
 # AI Agent Security Guard
 
-A bilingual (English/Arabic) web security platform that extends the ideas of **Agent Threat Scanner** into a multi-user runtime protection workflow for AI agents and Codex.
+A bilingual English/Arabic web security platform that extends the ideas of **Agent Threat Scanner** into a multi-user runtime protection workflow for AI agents and Codex.
 
 ## Core capabilities
 
 - Account creation and secure sign-in.
-- Strict per-user data isolation for scans, policies, approvals, logs, and integration tokens.
+- Strict per-user isolation for projects, scans, policies, approvals, audit logs, and integration tokens.
+- Project management so scans/reports can be separated per user project.
 - Static security rules for prompt injection, secret access, sensitive files, data exfiltration, remote execution, command injection, destructive actions, obfuscation, privilege escalation, persistence, and network abuse.
-- Optional local LLM semantic review through **Ollama**.
-- Risk scoring and `allow / block / approval` decisions.
+- Optional local semantic analysis through **Ollama**.
+- Per-user policy controls: thresholds, enabled categories, blocked domains, blocked tools, and tools that require approval.
+- Risk scoring with `allow / block / approval` decisions.
 - Human approval inbox for sensitive actions.
-- Audit logging, dashboard metrics, and user-scoped CSV security report export.
-- Codex lifecycle hook bridge for `UserPromptSubmit`, `PreToolUse`, and `PostToolUse` so both requested actions and returned untrusted content can be evaluated.
-- React + Vite web dashboard with complete English/Arabic switching and RTL support.
+- Codex lifecycle protection at `UserPromptSubmit`, `PreToolUse`, and `PostToolUse`.
+- Audit logging, filters, live WebSocket alerts, dashboard metrics, and user/project-scoped CSV report export.
+- React + Vite dashboard with English/Arabic switching and RTL support.
 - SQLite now, with SQLAlchemy models kept portable for later PostgreSQL migration.
 - Optional compatibility adapter for the original `@estelwalks/agent-threat-scanner` v0.2.0.
 
@@ -21,22 +23,17 @@ A bilingual (English/Arabic) web security platform that extends the ideas of **A
 ```text
 Codex / VS Code
       |
-      v
-Codex lifecycle hooks
-      |
-      v
-FastAPI Security API ------------------- React/Vite Dashboard
-      |                                        |
-      |                                        +-- Approve / Reject
-      v
-Rules Engine + optional Ollama LLM
-      |
-      +-- Allow
-      +-- Block
-      +-- Require Approval
-      |
-      v
-SQLite: users / scans / policies / approvals / audit logs
+      +--> UserPromptSubmit ----+
+      +--> PreToolUse ----------+--> FastAPI Security API
+      +--> PostToolUse ---------+          |
+                                         +--> Rules Engine
+                                         +--> Optional Ollama LLM
+                                         +--> Risk / Policy Engine
+                                         +--> Approval Workflow
+                                         +--> SQLite
+                                                  |
+                                             React Dashboard
+                                             + Live Alerts
 ```
 
 ## Security design
@@ -44,27 +41,31 @@ SQLite: users / scans / policies / approvals / audit logs
 - Passwords are hashed with Argon2.
 - Browser sessions use signed JWT access tokens.
 - Codex uses a separate random integration token; only its SHA-256 digest is stored in SQLite.
-- Every user-owned query includes `user_id` filtering.
+- Every protected user-owned query is scoped by `user_id`.
+- Raw scan content is redacted before persistence; common secret formats are not stored verbatim.
 - `.env`, SQLite DB files, private keys, node modules, local reports, and test DBs are excluded by `.gitignore`.
-- LLM analysis is optional and defaults to a local Ollama endpoint, so prompts do not need to leave the machine.
+- Ollama is optional and local-first; if unavailable, deterministic rules continue to work.
 - Codex hook mode defaults to fail-closed if the security API is unavailable.
+- SQLite migrations are additive so older local databases can continue to be used as features are added.
 
 ## Quick start on Windows
 
-### 1. Backend
+See **`WINDOWS_RUN_AR.md`** for the detailed Arabic Windows walkthrough.
+
+### Backend
 
 ```powershell
 cd backend
-python -m venv .venv
+py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-$env:JWT_SECRET="replace-with-a-long-random-secret-value"
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+$env:JWT_SECRET = (py -3 -c "import secrets; print(secrets.token_urlsafe(48))")
+py -3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 API docs: `http://127.0.0.1:8000/docs`
 
-### 2. Frontend
+### Frontend
 
 ```powershell
 cd frontend
@@ -74,20 +75,29 @@ npm run dev
 
 Open: `http://127.0.0.1:5173`
 
-### 3. Optional local LLM
-
-Install Ollama and pull a local model, then enable:
+### Optional local LLM
 
 ```powershell
+ollama pull qwen2.5:3b
 $env:OLLAMA_ENABLED="true"
 $env:OLLAMA_MODEL="qwen2.5:3b"
 ```
 
-If Ollama is unavailable, the application automatically keeps the deterministic rules result instead of failing the scan.
+Restart the backend after changing these variables.
 
-### 4. Codex integration
+### Codex integration
 
-Open **Codex Integration** in the dashboard, generate a token, then follow `codex/README.md`.
+1. Open **Codex Integration** in the dashboard.
+2. Generate an integration token.
+3. Set `AGENT_GUARD_URL` and `AGENT_GUARD_TOKEN` in the shell that launches VS Code/Codex.
+4. Run:
+
+```powershell
+cd codex
+.\install_hooks.bat
+```
+
+The installer backs up existing Codex hook configuration and preserves unrelated hooks. See `codex/README.md`.
 
 ## Tests
 
@@ -96,12 +106,12 @@ cd backend
 PYTHONPATH=. pytest -q
 ```
 
-The test suite includes 15 requirement-mapped tests (`FR01`–`FR15`) plus regression tests covering authentication, prompt/tool/output scanning, approvals, tenant isolation, policies, audit logs, secret redaction, filtering, and report export. See `TEST_REPORT.md` for verified results.
+Current verified result: **24 passed**. The suite contains a dedicated test for each of the 15 functional requirements. Live subprocess tests also verify the actual Codex hook bridge. See `TEST_REPORT.md`.
 
 ## Upstream scanner
 
 The `scanner-core/` directory integrates `@estelwalks/agent-threat-scanner` v0.2.0 for deeper artifact scanning. See `THIRD_PARTY_NOTICES.md` for attribution and the upstream MIT license.
 
-## Current scope
+## Current security boundary
 
-This academic release protects supported Codex lifecycle hook paths and the web/API workflow. OpenAI documents that some hosted or specialized tool paths may not pass through the default local function-tool hook path, so hooks should be treated as a strong guardrail rather than a universal sandbox boundary.
+`PreToolUse` can prevent a supported local tool action before it executes. `PostToolUse` runs after execution and therefore cannot reverse side effects; it can block unsafe tool output from continuing into the agent workflow. Codex lifecycle hooks are a strong guardrail for supported paths, not a universal sandbox for every possible hosted or specialized tool path.

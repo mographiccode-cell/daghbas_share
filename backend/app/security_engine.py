@@ -137,31 +137,63 @@ def decision_for(score: int, approval_threshold: int, block_threshold: int) -> s
     return 'allow'
 
 
-_SECRET_REDACTIONS = (
-    (re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}"), "[REDACTED_GITHUB_TOKEN]"),
-    (re.compile(r"(?:AKIA|ASIA)[A-Z0-9]{16}"), "[REDACTED_AWS_KEY]"),
-    (re.compile(r"-----BEGIN\s+(?:RSA|OPENSSH|EC|DSA)?\s*PRIVATE KEY-----[\s\S]*?-----END\s+(?:RSA|OPENSSH|EC|DSA)?\s*PRIVATE KEY-----", re.I), "[REDACTED_PRIVATE_KEY]"),
-    (re.compile(r"(?im)^([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY)[A-Z0-9_]*\s*[=:]\s*)(.+)$"), r"\1[REDACTED]"),
+def findings_json(findings: list[dict]) -> str:
+    return json.dumps(findings, ensure_ascii=False)
+
+
+_REDACTIONS = (
+    (re.compile(r'-----BEGIN\s+(?:RSA|OPENSSH|EC|DSA)?\s*PRIVATE KEY-----.*?-----END\s+(?:RSA|OPENSSH|EC|DSA)?\s*PRIVATE KEY-----', re.I | re.S), '[REDACTED_PRIVATE_KEY]'),
+    (re.compile(r'\bgh[pousr]_[A-Za-z0-9_]{20,}\b'), '[REDACTED_GITHUB_TOKEN]'),
+    (re.compile(r'\b(?:AKIA|ASIA)[A-Z0-9]{16}\b'), '[REDACTED_AWS_KEY]'),
+    (re.compile(r'(?i)\b(api[_-]?key|token|secret|password|passwd|pwd)\s*[:=]\s*["\']?([^\s"\';,}]{6,})'), r'\1=[REDACTED]'),
+    (re.compile(r'(?i)\bBearer\s+[A-Za-z0-9._~+/-]{12,}={0,2}'), 'Bearer [REDACTED]'),
 )
 
 
-def sanitize_for_storage(text: str, limit: int = 50000) -> str:
-    """Redact common secret material before persisting prompt/tool content."""
-    value = (text or '')[:limit]
-    for pattern, replacement in _SECRET_REDACTIONS:
-        value = pattern.sub(replacement, value)
-    return value
+def redact_sensitive(text: str) -> str:
+    redacted = text or ''
+    for pattern, replacement in _REDACTIONS:
+        redacted = pattern.sub(replacement, redacted)
+    return redacted
 
 
-def _sanitize_nested(value):
-    if isinstance(value, str):
-        return sanitize_for_storage(value, limit=10000)
-    if isinstance(value, list):
-        return [_sanitize_nested(v) for v in value]
-    if isinstance(value, dict):
-        return {k: _sanitize_nested(v) for k, v in value.items()}
-    return value
-
-
-def findings_json(findings: list[dict]) -> str:
-    return json.dumps(_sanitize_nested(findings), ensure_ascii=False)
+def policy_findings(text: str, tool_name: str | None, blocked_domains: Iterable[str] | None = None,
+                    blocked_tools: Iterable[str] | None = None) -> list[dict]:
+    findings: list[dict] = []
+    lowered = (text or '').lower()
+    for raw_domain in blocked_domains or []:
+        domain = str(raw_domain).strip().lower()
+        if domain and domain in lowered:
+            findings.append({
+                'id': 'POLICY_BLOCKED_DOMAIN',
+                'category': 'network_abuse',
+                'severity': 'high',
+                'weight': 90,
+                'title': f'Blocked domain: {domain}',
+                'title_ar': f'نطاق محظور: {domain}',
+                'recommendation': 'Remove or explicitly reconfigure the blocked destination.',
+                'recommendation_ar': 'أزل الوجهة المحظورة أو غيّر السياسة بشكل صريح.',
+                'match': domain,
+                'offset': lowered.find(domain),
+                'source': 'policy',
+            })
+    normalized_tool = (tool_name or '').strip().lower()
+    if normalized_tool:
+        for raw_tool in blocked_tools or []:
+            blocked = str(raw_tool).strip().lower()
+            if blocked and (normalized_tool == blocked or normalized_tool.startswith(blocked)):
+                findings.append({
+                    'id': 'POLICY_BLOCKED_TOOL',
+                    'category': 'command_injection',
+                    'severity': 'critical',
+                    'weight': 100,
+                    'title': f'Blocked tool: {tool_name}',
+                    'title_ar': f'أداة محظورة: {tool_name}',
+                    'recommendation': 'Use an allowed tool or update the user policy.',
+                    'recommendation_ar': 'استخدم أداة مسموحة أو حدّث سياسة المستخدم.',
+                    'match': tool_name,
+                    'offset': -1,
+                    'source': 'policy',
+                })
+                break
+    return findings

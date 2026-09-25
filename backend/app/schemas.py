@@ -14,11 +14,17 @@ class LoginIn(BaseModel):
     password: str
 
 
+class ProjectIn(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    description: str = Field(default='', max_length=2000)
+
+
 class ScanIn(BaseModel):
     source_type: str = 'prompt'
     source_text: str = Field(min_length=1, max_length=200000)
     tool_name: str | None = None
     session_id: str | None = None
+    project_id: int | None = None
 
 
 class PolicyIn(BaseModel):
@@ -27,6 +33,9 @@ class PolicyIn(BaseModel):
     llm_enabled: bool = True
     require_approval_for_sensitive_files: bool = True
     enabled_categories: list[str] = []
+    blocked_domains: list[str] = []
+    blocked_tools: list[str] = []
+    approval_tools: list[str] = []
 
 
 class CodexPromptIn(BaseModel):
@@ -46,11 +55,5 @@ class CodexToolIn(BaseModel):
     cwd: str | None = None
 
 
-class CodexPostToolIn(BaseModel):
-    session_id: str | None = None
-    turn_id: str | None = None
-    tool_name: str
-    tool_input: Any = None
+class CodexToolResultIn(CodexToolIn):
     tool_response: Any = None
-    model: str | None = None
-    cwd: str | None = None
