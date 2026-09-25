@@ -1,13 +1,12 @@
 {
-  "description": "AI Agent Security Guard hooks for Codex prompts and local tool calls.",
+  "description": "AI Agent Security Guard hooks for Codex prompts, tool calls, and returned external content.",
   "hooks": {
     "UserPromptSubmit": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .codex/hooks/agent_guard_hook.py",
-            "command_windows": "py -3 .codex\\hooks\\agent_guard_hook.py",
+            "command": "python .codex/hooks/agent_guard_hook.py",
             "timeout": 180,
             "statusMessage": "Checking prompt with AI Agent Security Guard"
           }
@@ -20,10 +19,22 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .codex/hooks/agent_guard_hook.py",
-            "command_windows": "py -3 .codex\\hooks\\agent_guard_hook.py",
+            "command": "python .codex/hooks/agent_guard_hook.py",
             "timeout": 180,
             "statusMessage": "Checking tool action with AI Agent Security Guard"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .codex/hooks/agent_guard_hook.py",
+            "timeout": 180,
+            "statusMessage": "Checking tool output with AI Agent Security Guard"
           }
         ]
       }
