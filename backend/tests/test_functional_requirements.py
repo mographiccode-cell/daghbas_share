@@ -154,6 +154,7 @@ def test_fr14_complete_audit_trail_and_secret_redaction():
     with SessionLocal() as db:
         row = db.query(SecurityScan).filter(SecurityScan.user_id==uid).order_by(SecurityScan.id.desc()).first()
         assert 'ghp_' not in row.source_text and '[REDACTED' in row.source_text
+        assert 'ghp_' not in row.findings_json and '[REDACTED' in row.findings_json
 
 
 def test_fr15_dashboard_filters_and_report_export():
